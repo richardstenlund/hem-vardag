@@ -103,8 +103,10 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 4. Andra personer väljer **Skapa ett här** i inloggningsrutan och registrerar sitt eget konto.
 5. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 6. Administratören kan öppna **Administrera konton** och återställa glömda lösenord. Inga hushållslistor visas i adminpanelen.
-7. **Alla konton är administratörer som standard.** Befintliga konton får rollen vid serverstart och nya konton får den direkt. Alla kan återställa andra kontons lösenord. Använd endast detta läge med personer du litar på: med öppen registrering kan vem som helst som når sidan skapa ett administratörskonto och ta över andra konton.
-8. För manuella roller: sätt `ALL_USERS_ADMIN=false` i `.env` och starta om med `docker compose up -d`. Befintliga administratörer behåller rollen, men nya konton blir vanliga användare. I kontohanteringen kan du sedan välja **Gör till administratör** eller **Gör till användare** och bekräfta. Minst en administratör måste finnas kvar. Roller gäller direkt, även för redan inloggade konton.
+7. **Manuella roller är standard.** Befintliga konton behåller sina roller och nya konton blir vanliga användare. Välj **Gör till administratör** eller **Gör till användare** och bekräfta. Minst en administratör måste finnas kvar. Roller gäller direkt, även för redan inloggade konton.
+8. **Ta bort användare** raderar kontot, dess privata listor och alla inloggningar permanent. Ta först en databasbackup. Delade listor behålls när en medlem tas bort. Äger kontot ett hushåll måste du först välja en annan medlem och **Överför ägarskap**. Om hushållet saknar andra medlemmar behöver ägaren bjuda in någon först. Den sista administratören kan inte tas bort. Kontot i `ADMIN_EMAIL` är också skyddat eftersom det annars återskapas vid omstart; byt inställningen till en annan administratör före borttagning.
+
+**Uppgradering från läget där alla var administratörer:** sätt `ALL_USERS_ADMIN=false` i `.env` och kör `docker compose up -d --build`. Tidigare administratörer behåller rollen tills du ändrar den i kontohanteringen. `ALL_USERS_ADMIN=true` går fortfarande att aktivera, men då får alla konton administratörsbehörighet och manuella rolländringar stängs av. Med öppen registrering kan vem som helst som når sidan då ta över andra konton genom att återställa deras lösenord.
 
 | Logga in eller skapa konto | Anpassad djurprofil |
 |---|---|
@@ -122,7 +124,7 @@ Admin-kontot skapas vid start om e-postadressen inte finns. En omstart ändrar *
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Egna databasuppgifter. Byt inte efter installation utan databasadministration |
 | `SECURE_COOKIES` | `false` för HTTP hemma, `true` bakom HTTPS |
 | `ALLOW_REGISTRATION` | `true` låter användare skapa konton; `false` stänger registreringen |
-| `ALL_USERS_ADMIN` | Standard `true`: alla befintliga och framtida konton blir administratörer. `false` aktiverar manuella roller utan att återställa befintliga roller |
+| `ALL_USERS_ADMIN` | Standard `false`: manuella roller, nya konton blir användare. `true` gör alla konton till administratörer vid start och registrering |
 | `SESSION_DAYS` | Hur länge inloggningen gäller; standard 30 dagar |
 
 Efter ändring: `docker compose up -d`. Lägg aldrig `.env` eller databasbackuper på GitHub.

@@ -11,9 +11,9 @@
   <main class="admin-main">
     <a href="/">← Hem &amp; vardag</a>
     <h1>Administrera konton</h1>
-    <p>Varje användare skapar sitt eget konto via startsidan. Här kan du återställa ett glömt lösenord och göra användare till administratörer eller vanliga användare. Administratörer kan hantera alla konton, men kontonas listor visas inte här. Minst en administratör måste finnas kvar.</p>
+    <p>Här kan du ändra roller, återställa lösenord och ta bort konton permanent. Minst en administratör måste finnas kvar. Om kontot äger ett delat hushåll måste du först överföra ägarskapet till en annan medlem. Kontonas listor visas inte här.</p>
     <p id="admin-status" role="status"></p>
-    <p id="admin-mode" hidden>Alla befintliga och nya konton är administratörer. Alla kan ändra andra kontons lösenord. Rolländringar till vanlig användare är avstängda i detta läge.</p>
+    <p id="admin-mode" hidden>Alla konton är administratörer och manuella roller är avstängda. Sätt ALL_USERS_ADMIN=false i serverns .env och starta om webbcontainern för att kunna ändra roller.</p>
     <p id="admin-role-status" role="status"></p>
     <div id="admin-users" class="item-grid"></div>
     <form id="admin-password-form" class="section-card" hidden>

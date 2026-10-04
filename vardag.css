@@ -33,6 +33,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .layout { min-height: 100vh; }
 .admin-main { max-width: 1100px; margin: auto; padding: 32px 20px; }
 .admin-main > .section-card { max-width: 500px; margin-top: 24px; }
+.admin-main .item-card { gap: 12px; overflow-wrap: anywhere; }
+.admin-main .item-card p { margin-bottom: 0; }
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 2; display: flex; width: 244px; flex-direction: column; padding: 32px 19px 24px; background: #173b32; color: #f5f5e9; }
 .brand { display: flex; align-items: center; gap: 11px; margin: 0 0 49px 8px; color: inherit; font-size: 21px; font-weight: 700; letter-spacing: -.06em; text-decoration: none; }
 .brand > span:last-child { line-height: 1; }

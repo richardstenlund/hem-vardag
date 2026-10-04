@@ -9,7 +9,7 @@ const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) =
 });
 const publicUser = user => ({ id: user.id, email: user.email, role: user.role });
 const dataLimit = 1024 * 1024;
-const allUsersAdmin = config => config.ALL_USERS_ADMIN !== 'false';
+const allUsersAdmin = config => config.ALL_USERS_ADMIN === 'true';
 
 async function initDatabase(pool, config = process.env) {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -141,6 +141,16 @@ function createApp(pool, config = process.env) {
       await client.query('ROLLBACK');
       throw error;
     } finally { client.release(); }
+  }
+  async function adminTransaction(req, action) {
+    return transaction(async client => {
+      // Serialize account removal and role changes, including concurrent admin requests.
+      const { rows: users } = await client.query('SELECT id, email, role FROM users ORDER BY id FOR UPDATE');
+      if (users.find(user => user.id === req.user.id)?.role !== 'admin') {
+        return { status: 403, error: 'Administratörsbehörighet krävs.' };
+      }
+      return action(client, users);
+    });
   }
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -287,7 +297,26 @@ function createApp(pool, config = process.env) {
   }
   app.get('/api/admin/users', ...admin(async (req, res) => {
     const { rows } = await pool.query('SELECT id, email, role, created_at FROM users ORDER BY id');
-    res.json({ users: rows, allUsersAdmin: allUsersAdmin(config) });
+    const { rows: spaces } = await pool.query('SELECT id, name, owner_id FROM household_spaces ORDER BY id');
+    const { rows: members } = await pool.query(
+      'SELECT m.household_id, u.id, u.email FROM household_members m JOIN users u ON u.id = m.user_id ORDER BY u.id');
+    const bootstrapEmail = String(config.ADMIN_EMAIL || '').trim().toLowerCase();
+    const users = rows.map(user => {
+      const space = spaces.find(item => item.owner_id === user.id);
+      const lastAdmin = user.role === 'admin' && rows.filter(item => item.role === 'admin').length === 1;
+      return {
+        ...user,
+        deletionBlockedReason: lastAdmin ? 'Den sista administratören kan inte tas bort.'
+          : user.email === bootstrapEmail ? 'Ändra ADMIN_EMAIL i serverns inställningar först, annars återskapas kontot vid omstart.'
+          : space ? 'Överför hushållets ägarskap innan kontot tas bort.' : '',
+        ownedHousehold: space ? {
+          id: space.id, name: space.name,
+          members: members.filter(member => member.household_id === space.id && member.id !== user.id)
+            .map(member => ({ id: member.id, email: member.email }))
+        } : null
+      };
+    });
+    res.json({ users, allUsersAdmin: allUsersAdmin(config) });
   }));
   app.post('/api/admin/users/:id/role', ...admin(async (req, res) => {
     const id = Number(req.params.id);
@@ -298,12 +327,7 @@ function createApp(pool, config = process.env) {
     if (allUsersAdmin(config) && role === 'user') {
       return res.status(409).json({ error: 'Alla konton ska vara administratörer. Stäng av ALL_USERS_ADMIN innan du ändrar till vanlig användare.' });
     }
-    const result = await transaction(async client => {
-      // Lock in a stable order so simultaneous demotions cannot remove every admin.
-      const { rows: users } = await client.query('SELECT id, role FROM users ORDER BY id FOR UPDATE');
-      if (users.find(user => user.id === req.user.id)?.role !== 'admin') {
-        return { status: 403, error: 'Administratörsbehörighet krävs.' };
-      }
+    const result = await adminTransaction(req, async (client, users) => {
       const target = users.find(user => user.id === id);
       if (!target) return { status: 404, error: 'Kontot hittades inte.' };
       if (target.role === 'admin' && role === 'user' && users.filter(user => user.role === 'admin').length === 1) {
@@ -313,6 +337,47 @@ function createApp(pool, config = process.env) {
       return { status: 200, user };
     });
     res.status(result.status).json(result.error ? { error: result.error } : { user: result.user });
+  }));
+  app.post('/api/admin/users/:id/household-owner', ...admin(async (req, res) => {
+    const id = Number(req.params.id);
+    const newOwnerId = req.body?.newOwnerId;
+    if (!Number.isSafeInteger(id) || id < 1 || !Number.isSafeInteger(newOwnerId) || newOwnerId < 1 || id === newOwnerId) {
+      return res.status(400).json({ error: 'Välj en annan hushållsmedlem som ny ägare.' });
+    }
+    const result = await adminTransaction(req, async (client, users) => {
+      if (!users.some(user => user.id === id)) return { status: 404, error: 'Kontot hittades inte.' };
+      const { rows: [space] } = await client.query('SELECT id FROM household_spaces WHERE owner_id = $1 FOR UPDATE', [id]);
+      if (!space) return { status: 404, error: 'Kontot äger inget hushåll.' };
+      const { rows: [member] } = await client.query(
+        'SELECT user_id FROM household_members WHERE household_id = $1 AND user_id = $2', [space.id, newOwnerId]);
+      if (!member) return { status: 400, error: 'Den nya ägaren måste redan tillhöra hushållet.' };
+      await client.query('UPDATE household_spaces SET owner_id = $1 WHERE id = $2', [newOwnerId, space.id]);
+      await client.query("UPDATE household_members SET role = 'member' WHERE household_id = $1 AND user_id = $2", [space.id, id]);
+      await client.query("UPDATE household_members SET role = 'owner' WHERE household_id = $1 AND user_id = $2", [space.id, newOwnerId]);
+      return { status: 200 };
+    });
+    res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
+  }));
+  app.delete('/api/admin/users/:id', ...admin(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Ange ett giltigt konto.' });
+    const result = await adminTransaction(req, async (client, users) => {
+      const target = users.find(user => user.id === id);
+      if (!target) return { status: 404, error: 'Kontot hittades inte.' };
+      if (req.body?.email !== target.email) return { status: 400, error: 'Bekräfta kontots e-postadress för att ta bort det.' };
+      if (target.role === 'admin' && users.filter(user => user.role === 'admin').length === 1) {
+        return { status: 409, error: 'Den sista administratören kan inte tas bort.' };
+      }
+      if (target.email === String(config.ADMIN_EMAIL || '').trim().toLowerCase()) {
+        return { status: 409, error: 'Ändra ADMIN_EMAIL i serverns inställningar först, annars återskapas kontot vid omstart.' };
+      }
+      const { rows: [space] } = await client.query('SELECT id FROM household_spaces WHERE owner_id = $1 FOR UPDATE', [id]);
+      if (space) return { status: 409, error: 'Överför hushållets ägarskap till en annan medlem innan kontot tas bort.' };
+      await client.query('DELETE FROM users WHERE id = $1', [id]);
+      return { status: 200 };
+    });
+    if (!result.error && id === req.user.id) cookie(res, '', 0);
+    res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
   }));
   app.post('/api/admin/users/:id/password', ...admin(async (req, res) => {
     const id = Number(req.params.id);

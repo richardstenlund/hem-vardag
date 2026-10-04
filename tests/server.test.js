@@ -147,8 +147,8 @@ test('only admins can change roles and the last admin is protected', async t => 
   assert.equal((await change(admin.json.user.id, 'admin')).status, 200);
 });
 
-test('all-admin default promotes existing users and grants new accounts admin access', async t => {
-  const { pool, request, register } = await fixture(t, { ALL_USERS_ADMIN: undefined });
+test('optional all-admin mode promotes existing users and grants new accounts admin access', async t => {
+  const { pool, request, register } = await fixture(t, { ALL_USERS_ADMIN: 'true' });
   const account = await register('everyone@example.test');
   assert.equal(account.json.user.role, 'admin');
   const list = await request('/api/admin/users', { cookie: account.cookie });
@@ -160,13 +160,105 @@ test('all-admin default promotes existing users and grants new accounts admin ac
   await pool.query("UPDATE users SET role = 'user' WHERE id = $1", [account.json.user.id]);
   const existingSchema = { query: (sql, values) => sql.startsWith('CREATE TABLE IF NOT EXISTS')
     ? Promise.resolve({ rows: [] }) : pool.query(sql, values) };
-  await initDatabase(existingSchema, {});
+  await initDatabase(existingSchema, { ALL_USERS_ADMIN: 'true' });
   assert.equal((await request('/api/me', { cookie: account.cookie })).json.user.role, 'admin');
   const next = await register('next@example.test');
   assert.equal(next.json.user.role, 'admin');
   assert.equal((await request(`/api/admin/users/${next.json.user.id}/password`, {
     method: 'POST', cookie: account.cookie, body: { newPassword: 'Resetpassword123!' }
   })).status, 200);
+});
+
+test('manual roles are the default and survive restart after all-admin mode is disabled', async t => {
+  const { pool, request, register } = await fixture(t, { ALL_USERS_ADMIN: undefined });
+  const person = await register('manual@example.test');
+  assert.equal(person.json.user.role, 'user');
+  await pool.query("UPDATE users SET role = 'admin' WHERE id = $1", [person.json.user.id]);
+  const existingSchema = { query: (sql, values) => sql.startsWith('CREATE TABLE IF NOT EXISTS')
+    ? Promise.resolve({ rows: [] }) : pool.query(sql, values) };
+  await initDatabase(existingSchema, {});
+  assert.equal((await request('/api/me', { cookie: person.cookie })).json.user.role, 'admin');
+  assert.equal((await request('/api/admin/users', { cookie: person.cookie })).json.allUsersAdmin, false);
+  const next = await register('nextmanual@example.test');
+  assert.equal(next.json.user.role, 'user');
+  assert.equal((await request(`/api/admin/users/${next.json.user.id}/role`, {
+    method: 'POST', cookie: person.cookie, body: { role: 'admin' }
+  })).status, 200);
+  assert.equal((await request(`/api/admin/users/${person.json.user.id}/role`, {
+    method: 'POST', cookie: next.cookie, body: { role: 'user' }
+  })).status, 200);
+  await initDatabase(existingSchema, {});
+  assert.equal((await request('/api/me', { cookie: person.cookie })).json.user.role, 'user');
+  assert.equal((await request('/api/me', { cookie: next.cookie })).json.user.role, 'admin');
+});
+
+test('account removal checks permissions and preserves the last and bootstrap admins', async t => {
+  const { pool, request, register } = await fixture(t, { ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: 'Adminpassword123!' });
+  const admin = await request('/api/auth/login', { method: 'POST', body: { email: 'admin@example.test', password: 'Adminpassword123!' } });
+  const person = await register('delete@example.test');
+  const remove = (id, email, cookie = admin.cookie) => request(`/api/admin/users/${id}`, {
+    method: 'DELETE', cookie, body: { email }
+  });
+  assert.equal((await request(`/api/admin/users/${person.json.user.id}`, { method: 'DELETE' })).status, 401);
+  assert.equal((await remove(person.json.user.id, person.json.user.email, person.cookie)).status, 403);
+  assert.equal((await remove('bad', person.json.user.email)).status, 400);
+  assert.equal((await remove(9999, 'missing@example.test')).status, 404);
+  assert.equal((await remove(person.json.user.id, 'wrong@example.test')).status, 400);
+  const current = await request('/api/household', { cookie: person.cookie });
+  await request('/api/household', { method: 'PUT', cookie: person.cookie,
+    body: { data: { notes: [{ id: 'private', title: 'Privat' }] }, version: current.json.version } });
+  assert.equal((await remove(admin.json.user.id, admin.json.user.email)).status, 409);
+  await request(`/api/admin/users/${person.json.user.id}/role`, { method: 'POST', cookie: admin.cookie, body: { role: 'admin' } });
+  assert.equal((await remove(admin.json.user.id, admin.json.user.email)).status, 409);
+  assert.equal((await remove(person.json.user.id, person.json.user.email, person.cookie)).status, 200);
+  assert.equal((await request('/api/me', { cookie: person.cookie })).json.user, null);
+  assert.equal((await pool.query('SELECT * FROM household_data WHERE user_id = $1', [person.json.user.id])).rows.length, 0);
+  assert.equal((await pool.query('SELECT * FROM sessions WHERE user_id = $1', [person.json.user.id])).rows.length, 0);
+  assert.equal((await remove(person.json.user.id, person.json.user.email)).status, 404);
+});
+
+test('transfer ownership before deleting an owner; keep shared lists when deleting members', async t => {
+  const { request, register } = await fixture(t, { ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: 'Adminpassword123!' });
+  const admin = await request('/api/auth/login', { method: 'POST', body: { email: 'admin@example.test', password: 'Adminpassword123!' } });
+  const owner = await register('owner@example.test');
+  const member = await register('member@example.test');
+  const outsider = await register('outsider@example.test');
+  const created = await request('/api/household/create', { method: 'POST', cookie: owner.cookie, body: { name: 'Delat hem' } });
+  const remove = account => request(`/api/admin/users/${account.json.user.id}`, {
+    method: 'DELETE', cookie: admin.cookie, body: { email: account.json.user.email }
+  });
+  const transfer = (newOwnerId, cookie = admin.cookie, id = owner.json.user.id) =>
+    request(`/api/admin/users/${id}/household-owner`, { method: 'POST', cookie, body: { newOwnerId } });
+  assert.equal((await remove(owner)).status, 409);
+  assert.equal((await transfer(member.json.user.id, owner.cookie)).status, 403);
+  assert.equal((await transfer('bad')).status, 400);
+  assert.equal((await transfer(owner.json.user.id)).status, 400);
+  assert.equal((await transfer(member.json.user.id)).status, 400);
+  assert.equal((await transfer(member.json.user.id, admin.cookie, outsider.json.user.id)).status, 404);
+  await request('/api/household/join', { method: 'POST', cookie: member.cookie, body: { code: created.json.household.inviteCode } });
+  await request('/api/household/join', { method: 'POST', cookie: outsider.cookie, body: { code: created.json.household.inviteCode } });
+  const latest = await request('/api/household', { cookie: owner.cookie });
+  const data = { notes: [{ id: 'keep', title: 'Behåll delat' }] };
+  await request('/api/household', { method: 'PUT', cookie: owner.cookie, body: { data, version: latest.json.version } });
+  const list = await request('/api/admin/users', { cookie: admin.cookie });
+  const account = list.json.users.find(user => user.id === owner.json.user.id);
+  assert.equal(account.ownedHousehold.members.length, 2);
+  assert.ok(account.deletionBlockedReason);
+  assert.equal((await transfer(member.json.user.id)).status, 200);
+  const newOwner = await request('/api/household', { cookie: member.cookie });
+  assert.equal(newOwner.json.household.role, 'owner');
+  assert.equal(newOwner.json.household.inviteCode, created.json.household.inviteCode);
+  assert.deepEqual(newOwner.json.data, data);
+  const oldOwner = await request('/api/household', { cookie: owner.cookie });
+  assert.equal(oldOwner.json.household.role, 'member');
+  assert.equal(oldOwner.json.household.inviteCode, '');
+  assert.equal((await remove(owner)).status, 200);
+  assert.equal((await remove(outsider)).status, 200);
+  assert.equal((await request('/api/me', { cookie: owner.cookie })).json.user, null);
+  const kept = await request('/api/household', { cookie: member.cookie });
+  assert.deepEqual(kept.json.data, data);
+  assert.equal(kept.json.household.members.length, 1);
+  assert.equal((await remove(member)).status, 409);
 });
 
 test('invalid input, external origins, registration toggle and payload limits', async t => {
