@@ -1,3 +1,9 @@
+html[data-account-role="reader"] :is(#add-button, #add-picker, #import-button, #import-file, [data-action="quick-add"], [data-action="quick-type"], [data-action="empty-add"], [data-action="template"], [data-action="edit"], [data-action="delete"], [data-action="restock"], [data-action="use-expiring"], [data-action="pet-food"], [data-action="recipe-meal"], [data-action="recipe-shopping"], [data-action="complete-repeat"]) {
+	display: none !important;
+}
+html[data-account-role="reader"] [data-action="toggle"] {
+	pointer-events: none;
+}
 :root {
 	--ink: #23382f;
 	--muted: #7d8c7f;

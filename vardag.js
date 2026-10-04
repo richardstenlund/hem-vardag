@@ -54,6 +54,13 @@
 	let syncing = false;
 	let editGeneration = 0;
 	const $ = selector => document.querySelector(selector);
+	const readOnly = () => currentUser?.role === 'reader';
+	const editingActions = ['quick-add', 'quick-type', 'empty-add', 'template', 'edit', 'delete', 'restock', 'use-expiring', 'pet-food', 'recipe-meal', 'recipe-shopping', 'complete-repeat'];
+	function mayEdit() {
+		if (!readOnly()) return true;
+		showToast('Du är läsare och kan bara läsa listorna. Be en administratör ändra din roll.');
+		return false;
+	}
 	const createId = () => globalThis.crypto?.randomUUID
 		? globalThis.crypto.randomUUID()
 		: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -160,6 +167,7 @@
 	}
 
 	function persist() {
+		if (!mayEdit()) return;
 		editGeneration += 1;
 		if (currentUser && !accountReady) {
 			showToast('Kontots listor är inte laddade. Ta en Backup och ladda om sidan.');
@@ -247,7 +255,7 @@
 			const repeats = ['chores', 'maintenance', 'bills'].includes(type) && item.repeat && item.repeat !== 'none';
 			footer = repeats
 				? `<button class="complete-button" data-action="complete-repeat" data-type="${type}" data-id="${escapeHtml(item.id)}" type="button">${type === 'bills' ? '✓ Betald' : '✓ Klar idag'}</button>${item.lastDone ? `<span class="preview-meta">Senast ${escapeHtml(formatDate(item.lastDone))}</span>` : ''}`
-				: `<label class="item-check"><input type="checkbox" data-action="toggle" data-type="${type}" data-id="${escapeHtml(item.id)}" ${item.completed ? 'checked' : ''}> ${item.completed ? 'Klart' : 'Markera klar'}</label>`;
+				: `<label class="item-check"><input type="checkbox" data-action="toggle" data-type="${type}" data-id="${escapeHtml(item.id)}" ${item.completed ? 'checked' : ''} ${readOnly() ? 'disabled' : ''}> ${item.completed ? 'Klart' : 'Markera klar'}</label>`;
 		} else if (item.quantity) {
 			footer = `<span>${escapeHtml(item.quantity)}</span>`;
 		} else if (item.due) {
@@ -324,7 +332,7 @@
 		const leading = checkable && repeats
 			? `<button class="mini-complete" data-action="complete-repeat" data-type="${type}" data-id="${escapeHtml(item.id)}" type="button" aria-label="${type === 'bills' ? 'Markera som betald' : 'Markera som klar'}">✓</button>`
 			: checkable
-				? `<input class="mini-check" type="checkbox" data-action="toggle" data-type="${type}" data-id="${escapeHtml(item.id)}" ${item.completed ? 'checked' : ''} aria-label="Markera ${escapeHtml(item.title)} som klar">`
+				? `<input class="mini-check" type="checkbox" data-action="toggle" data-type="${type}" data-id="${escapeHtml(item.id)}" ${item.completed ? 'checked' : ''} ${readOnly() ? 'disabled' : ''} aria-label="Markera ${escapeHtml(item.title)} som klar">`
 				: `<span>${types[type].icon}</span>`;
 		return `<div class="preview-row">${leading}<span>${escapeHtml(item.title)}</span><span class="preview-meta">${escapeHtml(meta)}</span></div>`;
 	}
@@ -490,7 +498,7 @@
 			content.innerHTML = `<p class="modal-description">Hushåll: <strong>${escapeHtml(householdInfo.name)}</strong> · ${householdInfo.members.length}/10 personer</p><ul class="member-list">${householdInfo.members.map(member => `<li>${escapeHtml(member.email)}${member.role === 'owner' ? ' · ägare' : ''}</li>`).join('')}</ul>${householdInfo.inviteCode ? `<label class="form-field">Inbjudningskod<input id="invite-code" readonly value="${escapeHtml(householdInfo.inviteCode)}"></label><button class="primary-button full-button" data-action="copy-invite" type="button">Kopiera kod</button>` : '<p class="preview-empty">Be hushållets ägare om en inbjudningskod.</p>'}`;
 			return;
 		}
-		content.innerHTML = `<form id="create-household-form"><label class="form-field">Namn på hushållet<input name="name" maxlength="80" value="Mitt hushåll" required></label><button class="primary-button full-button" type="submit">Skapa delat hushåll</button></form><div class="share-divider">eller gå med i ett hushåll</div><form id="join-household-form"><label class="form-field">Inbjudningskod<input name="code" minlength="12" maxlength="12" pattern="[A-Fa-f0-9]{12}" required placeholder="12 tecken"></label><button class="secondary-button full-button" type="submit">Gå med</button></form><p class="preview-empty">Dina privata listor följer med in i hushållet.</p>`;
+		content.innerHTML = `${readOnly() ? '' : '<form id="create-household-form"><label class="form-field">Namn på hushållet<input name="name" maxlength="80" value="Mitt hushåll" required></label><button class="primary-button full-button" type="submit">Skapa delat hushåll</button></form><div class="share-divider">eller gå med i ett hushåll</div>'}<form id="join-household-form"><label class="form-field">Inbjudningskod<input name="code" minlength="12" maxlength="12" pattern="[A-Fa-f0-9]{12}" required placeholder="12 tecken"></label><button class="secondary-button full-button" type="submit">Gå med</button></form><p class="preview-empty">${readOnly() ? 'Som läsare går du med utan att ändra hushållets listor. Dina privata listor behålls separat men visas inte medan du tillhör hushållet.' : 'Dina privata listor följer med in i hushållet.'}</p>`;
 	}
 
 	async function submitHouseholdForm(event) {
@@ -503,7 +511,10 @@
 		try {
 			await saveQueue;
 			if (unsynced || !accountReady) throw new Error('Spara dina listor innan du delar. Ta Backup om synkningen misslyckats.');
-			if (form.id === 'join-household-form' && !window.confirm('Alla dina listor delas med hushållets medlemmar. Vill du fortsätta?')) return;
+			if (readOnly() && form.id === 'create-household-form') throw new Error('Läsare kan inte skapa hushåll.');
+			if (form.id === 'join-household-form' && !window.confirm(readOnly()
+				? 'Gå med som läsare? Hushållets listor ändras inte och dina privata listor delas inte.'
+				: 'Alla dina listor delas med hushållets medlemmar. Vill du fortsätta?')) return;
 			const result = await api(form.id === 'create-household-form' ? '/household/create' : '/household/join', {
 				method: 'POST',
 				body: JSON.stringify(form.id === 'create-household-form' ? { name: formData.get('name') } : { code: formData.get('code') })
@@ -710,6 +721,7 @@
 
 	function saveItem(event) {
 		event.preventDefault();
+		if (!mayEdit()) return;
 		const type = $('#item-modal').dataset.type;
 		const formData = new FormData(event.currentTarget);
 		const title = String(formData.get('title') || '').trim();
@@ -817,6 +829,7 @@
 	}
 
 	async function restoreBackup(event) {
+		if (!mayEdit()) { event.target.value = ''; return; }
 		const file = event.target.files?.[0];
 		event.target.value = '';
 		if (!file) return;
@@ -845,6 +858,7 @@
 		}
 		if (button.matches('.nav-link')) return setView(button.dataset.view);
 		if (button.dataset.goto) return setView(button.dataset.goto);
+		if ((editingActions.includes(button.dataset.action) || ['add-button', 'import-button'].includes(button.id)) && !mayEdit()) return;
 		if (button.id === 'add-button') {
 			if (activeView === 'home') {
 				$('#add-picker').hidden = !$('#add-picker').hidden;
@@ -1017,6 +1031,7 @@
 			return;
 		}
 		if (checkbox.dataset.action !== 'toggle') return;
+		if (!mayEdit()) { checkbox.checked = !checkbox.checked; return; }
 		const item = data[checkbox.dataset.type].find(entry => entry.id === checkbox.dataset.id);
 		if (!item) return;
 		const type = checkbox.dataset.type;
@@ -1054,8 +1069,11 @@
 		const remote = normaliseData(result.data);
 		householdInfo = result.household;
 		dataVersion = result.version;
-		data = mergeData(remote, guestData);
-		if (Object.values(guestData).some(items => items.length)) {
+		data = readOnly() ? remote : mergeData(remote, guestData);
+		if (readOnly() && Object.values(guestData).some(items => items.length)) {
+			showToast('Dina lokala gästlistor behålls på enheten men importeras inte till ett läsarkonto.');
+		}
+		if (!readOnly() && Object.values(guestData).some(items => items.length)) {
 			const saved = await api('/household', { method: 'PUT', body: JSON.stringify({ data, version: dataVersion }) });
 			dataVersion = saved.version;
 			try {
@@ -1065,7 +1083,7 @@
 			}
 		}
 		accountReady = true;
-		$('#save-status').textContent = householdInfo ? 'Sparat i hushållet' : 'Sparat på ditt konto';
+		$('#save-status').textContent = readOnly() ? 'Läsbehörighet – inga ändringar kan sparas' : householdInfo ? 'Sparat i hushållet' : 'Sparat på ditt konto';
 		$('#share-button').hidden = false;
 		updateAccountControls();
 		render();
@@ -1082,7 +1100,7 @@
 			data = normaliseData(result.data);
 			householdInfo = result.household;
 			dataVersion = result.version;
-			$('#save-status').textContent = 'Synkat med hushållet';
+			$('#save-status').textContent = readOnly() ? 'Synkat med hushållet – läsbehörighet' : 'Synkat med hushållet';
 			render();
 		} catch (error) {
 			$('#save-status').textContent = 'Hushållet kunde inte synkas';
@@ -1118,7 +1136,7 @@
 			await loadAccountData(guestData);
 			closeModal('auth-modal');
 			$('#auth-form').reset();
-			showToast('Du är inloggad och kan nu använda sidan och administrera konton.');
+			showToast('Du är inloggad och kan nu använda sidan.');
 		} catch (error) {
 			$('#auth-error').textContent = error.message;
 			showToast(error.message);
@@ -1151,6 +1169,7 @@
 	}
 
 	function updateAccountControls() {
+		document.documentElement.dataset.accountRole = currentUser?.role || 'guest';
 		$('#admin-link').hidden = currentUser?.role !== 'admin';
 		$('#password-button').hidden = !currentUser;
 		$('#security-link').hidden = !currentUser;

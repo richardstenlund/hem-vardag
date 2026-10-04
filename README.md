@@ -14,7 +14,7 @@ En fristående svensk hemsida för livet hemma: recept, anteckningar, sysslor, i
 - Räkningar, registrerade utgifter och månadssummering.
 - Kalender över daterade poster, dokumentlänkar och checklistmallar.
 - Egna användarkonton och delat hushåll för upp till 10 personer via inbjudningskod.
-- Enkel registrering med användarnamn och lösenord, utan e-post; alla konton är administratörer. Inaktivering, sessionshantering och administrativ aktivitetslogg.
+- Enkel registrering med användarnamn och lösenord, utan e-post; nya konton är administratörer och kan ändras till användare eller läsare. Inaktivering, sessionshantering och administrativ aktivitetslogg.
 - Valfri tvåstegsverifiering med autentiseringsapp och engångsåterställningskoder.
 - JSON-backup och återställning av listor.
 
@@ -105,10 +105,10 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 2. Tryck **Logga in** och använd admin-uppgifterna från `.env` eller installationsskriptet.
 3. Välj **Byt lösenord** i menyn och sätt ett eget lösenord. På mobil finns länken i toppfältet.
 4. Du kan använda sidan och **Administrera konton** direkt efter inloggning. **Kontosäkerhet** innehåller valfri tvåstegsverifiering och dina inloggningar.
-5. Alla inloggade kan välja **Administrera konton → Skapa användare**, ange användarnamn och lösenord (8–256 tecken) och skapa ett nytt administratörskonto. Den som skapar kontot förblir inloggad på sitt eget konto. Lämna uppgifterna säkert till den nya användaren; ingen inbjudan eller e-post behövs. Detta fungerar även när offentlig registrering är avstängd. Andra personer kan också trycka **Skapa konto** i toppfältet när registrering är öppen och loggas då in direkt.
+5. Administratörer kan välja **Administrera konton → Skapa användare**, ange användarnamn och lösenord (8–256 tecken) och skapa ett nytt administratörskonto. Efter skapandet kan du välja **Användare** eller **Läsare** under **Roll** och trycka **Spara roll**. Den som skapar kontot förblir inloggad på sitt eget konto. Lämna uppgifterna säkert till den nya användaren; ingen inbjudan eller e-post behövs. Detta fungerar även när offentlig registrering är avstängd. Andra personer kan också trycka **Skapa konto** i toppfältet när registrering är öppen och loggas då in direkt.
 6. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 7. Administratören kan återställa glömda lösenord. Inga hushållslistor visas i adminpanelen. Lösenordsåterställning stänger kontots inloggningar men tar inte bort tvåstegsverifieringen.
-8. **Alla konton är administratörer.** Befintliga konton får rollen vid serverstart och nya konton får den direkt. Det finns inga rollknappar eller krav på tvåstegsverifiering. Minst ett aktivt konto måste finnas kvar.
+8. **Välj roll efter skapandet.** Nya konton är administratörer som tidigare. Välj **Administratör**, **Användare** eller **Läsare** under **Roll** på kontot och tryck **Spara roll**. Ändringen gäller direkt på servern även för redan inloggade och behålls efter omstart. Ladda om sidan för att uppdatera knapparna efter en rolländring på en annan enhet. Minst en aktiv administratör måste finnas kvar. Tvåstegsverifiering är fortsatt valfri. Om du ändrar din egen roll förlorar du åtkomst till kontohanteringen.
 9. Använd helst **Inaktivera konto** när någon inte längre ska ha åtkomst. Alla sessioner avslutas och nya inloggningar blockeras, men kontot och listorna behålls. **Aktivera konto** tillåter inloggning igen. Hushållsmedlemskap behålls; övriga medlemmar kan fortsätta använda de delade listorna. Den sista aktiva administratören kan inte inaktiveras, tas bort eller nedgraderas.
 10. **Ta bort användare** raderar kontot, dess privata listor och alla inloggningar permanent. Ta först en databasbackup. Delade listor behålls när en medlem tas bort. Äger kontot ett hushåll måste du först välja en annan medlem och **Överför ägarskap**. Om hushållet saknar andra medlemmar behöver ägaren bjuda in någon först. Kontot i `ADMIN_USERNAME` (eller äldre `ADMIN_EMAIL`) är skyddat eftersom det annars återskapas vid omstart; byt inställningen till en annan administratör före borttagning.
 
@@ -122,7 +122,7 @@ Admin-kontot skapas vid start om användarnamnet inte finns. En omstart ändrar 
 
 ### Enkel registrering och standardadministratör
 
-Standardadministratören skapas vid serverstart med `ADMIN_USERNAME` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Äldre `ADMIN_EMAIL` fungerar fortfarande om `ADMIN_USERNAME` inte anges. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord eller tvåstegsverifiering. Alla befintliga konton blir administratörer utan att avstängda konton aktiveras.
+Standardadministratören skapas vid serverstart med `ADMIN_USERNAME` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Äldre `ADMIN_EMAIL` fungerar fortfarande om `ADMIN_USERNAME` inte anges. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord, roll eller tvåstegsverifiering. Befintliga kontons roller och status bevaras.
 
 `ALLOW_REGISTRATION=true` låter personer skapa konto med bara användarnamn och lösenord. Användarnamnet har 2–64 bokstäver (även å, ä och ö), siffror, punkt, bindestreck eller understreck, utan mellanslag. Namn trimmas och sparas med små bokstäver; `Richard` och `richard` är samma namn. Alla får administratörsbehörighet direkt och kan hantera konton utan extra inställningar. Listorna är fortfarande privata tills man delar hushåll. Hushållets delningskod finns kvar för att dela listor; registrering ansluter inte automatiskt någon till ett hushåll. Gamla `ALL_USERS_ADMIN`-inställningar ignoreras.
 
@@ -157,7 +157,18 @@ Adminpanelen visar aktör, berört konto, tid och åtgärd för skapande, lösen
 
 ### Rekommenderad användarhantering
 
-Ge varje person ett eget konto och släpp endast in personer du litar på, eftersom alla får administratörsbehörighet. Inaktivera hellre än att radera direkt, ta backup före borttagning och begränsa nätverksåtkomst till hemnät eller VPN. Använd HTTPS om sidan nås utanför hemmet.
+| Rättighet | Administratör | Användare | Läsare |
+|---|---|---|---|
+| Läsa, söka, kalender och ladda ned backup av egna/delade listor | Ja | Ja | Ja |
+| Skapa, ändra, bocka av, ta bort, checklistmallar och återställa listor | Ja | Ja | Nej |
+| Skapa hushåll | Ja | Ja | Nej |
+| Gå med i hushåll via delningskod | Ja | Ja | Ja, utan att slå ihop eller ändra listor |
+| Skapa/radera konton, ändra roller, lösenordsåterställning och aktivitetslogg | Ja | Nej | Nej |
+| Eget lösenord, egna sessioner och valfri tvåstegsverifiering | Ja | Ja | Ja |
+
+Rollerna ger aldrig automatisk åtkomst till någon annans privata listor eller andra hushåll. Läsare behåller lokala gästlistor på enheten utan att importera dem. När en läsare går med i ett hushåll behålls tidigare privata listor i databasen utan att delas; hushållets listor visas i stället. Administratörer kan dock återställa andras lösenord, så ge endast den rollen till betrodda personer.
+
+Ge varje person ett eget konto. Gör konton som inte behöver hantera andra konton till vanliga användare. Nya konton får fortfarande administratörsbehörighet, så stäng offentlig registrering med `ALLOW_REGISTRATION=false` om endast administratörer ska skapa konton. Inaktivera hellre än att radera direkt, ta backup före borttagning och begränsa nätverksåtkomst till hemnät eller VPN. Använd HTTPS om sidan nås utanför hemmet.
 
 ## Inställningar
 
@@ -187,7 +198,7 @@ git pull --ff-only
 docker compose up -d --build
 ```
 
-Listor och konton ligger kvar i databasvolymen. Alla befintliga konton blir administratörer vid serverstart; lösenord, hushåll och kontostatus bevaras. Tvåstegsverifiering krävs inte längre men befintlig aktiverad verifiering behålls. `INVITE_ONLY` och `ALL_USERS_ADMIN` används inte längre. Sätt `ALLOW_REGISTRATION=true` för enkel registrering. Stoppa med `docker compose down`. **Använd inte `docker compose down -v`** om du vill behålla databasen och backuperna.
+Listor och konton ligger kvar i databasvolymen. Befintliga roller, lösenord, hushåll och kontostatus bevaras; vanliga användare blir inte automatiskt administratörer vid omstart. Tvåstegsverifiering krävs inte men befintlig aktiverad verifiering behålls. `INVITE_ONLY` och `ALL_USERS_ADMIN` används inte längre. Sätt `ALLOW_REGISTRATION=true` för enkel registrering. Stoppa med `docker compose down`. **Använd inte `docker compose down -v`** om du vill behålla databasen och backuperna.
 
 ## Säkerhetskopiering
 

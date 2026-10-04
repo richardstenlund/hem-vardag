@@ -23,9 +23,11 @@ async function initDatabase(pool, config = process.env) {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY, email VARCHAR(254) NOT NULL UNIQUE,
     password_hash CHAR(128) NOT NULL, password_salt CHAR(32) NOT NULL,
-    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+    role VARCHAR(10) NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'reader')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await pool.query('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check');
+  await pool.query("ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'user', 'reader'))");
   await pool.query(`CREATE TABLE IF NOT EXISTS sessions (
     id VARCHAR(64) PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at BIGINT NOT NULL
@@ -57,7 +59,6 @@ async function initDatabase(pool, config = process.env) {
       `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, 'admin')
        ON CONFLICT (email) DO NOTHING`, [email, hash, salt]);
   }
-  await pool.query("UPDATE users SET role = 'admin' WHERE role <> 'admin'");
 }
 
 function mergeHouseholdData(primary, secondary) {
@@ -284,7 +285,8 @@ function createApp(pool, config = process.env) {
     const json = JSON.stringify(data);
     if (Buffer.byteLength(json) > dataLimit) return res.status(413).json({ error: 'Listorna får vara högst 1 MB.' });
     const version = await transaction(async client => {
-      await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+      const { rows: [writer] } = await client.query('SELECT id, role, active FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+      if (!writer?.active || writer.role === 'reader') return false;
       const { rows: [membership] } = await client.query('SELECT household_id FROM household_members WHERE user_id = $1', [req.user.id]);
       if (membership) {
         const { rows: [space] } = await client.query('SELECT version FROM household_spaces WHERE id = $1 FOR UPDATE', [membership.household_id]);
@@ -299,6 +301,7 @@ function createApp(pool, config = process.env) {
          ON CONFLICT (user_id) DO UPDATE SET data_json = EXCLUDED.data_json, version = household_data.version + 1`, [req.user.id, json]);
       return `p:${req.user.id}:${(personal?.version || 0) + 1}`;
     });
+    if (version === false) return res.status(403).json({ error: 'Läsare kan bara läsa listorna. Be en administratör ändra din roll.' });
     if (!version) return res.status(409).json({ error: 'Listorna har ändrats på en annan enhet. Ta en Backup av dina ändringar och ladda om sidan innan du sparar igen.' });
     res.json({ saved: true, version });
   }));
@@ -309,7 +312,10 @@ function createApp(pool, config = process.env) {
         return res.status(400).json({ error: 'Kontrollera koden (12 tecken). Vid många försök: vänta 15 minuter.' });
       }
       const result = await transaction(async client => {
-        await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+        const { rows: [member] } = await client.query('SELECT id, role, active FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+        if (!member?.active || (member.role === 'reader' && mode === 'create')) {
+          return { status: 403, error: 'Läsare kan gå med i ett hushåll men inte skapa ett.' };
+        }
         const { rows } = await client.query('SELECT household_id FROM household_members WHERE user_id = $1', [req.user.id]);
         if (rows.length) return { error: 'Du tillhör redan ett hushåll.', status: 409 };
         const { rows: [personal] } = await client.query('SELECT data_json FROM household_data WHERE user_id = $1 FOR UPDATE', [req.user.id]);
@@ -326,14 +332,16 @@ function createApp(pool, config = process.env) {
           if (!found) return { error: 'Hushållskoden hittades inte.', status: 404 };
           const { rows: [size] } = await client.query('SELECT COUNT(*) AS count FROM household_members WHERE household_id = $1', [found.id]);
           if (Number(size.count) >= 10) return { error: 'Hushållet är fullt (10 personer).', status: 409 };
-          const json = JSON.stringify(mergeHouseholdData(JSON.parse(found.data_json), JSON.parse(personal?.data_json || '{}')));
-          if (Buffer.byteLength(json) > dataLimit) return { error: 'De sammanslagna listorna överstiger 1 MB.', status: 413 };
-          await client.query('UPDATE household_spaces SET data_json = $1, version = version + 1 WHERE id = $2', [json, found.id]);
+          if (member.role !== 'reader') {
+            const json = JSON.stringify(mergeHouseholdData(JSON.parse(found.data_json), JSON.parse(personal?.data_json || '{}')));
+            if (Buffer.byteLength(json) > dataLimit) return { error: 'De sammanslagna listorna överstiger 1 MB.', status: 413 };
+            await client.query('UPDATE household_spaces SET data_json = $1, version = version + 1 WHERE id = $2', [json, found.id]);
+          }
           space = found;
         }
         await client.query('INSERT INTO household_members (household_id, user_id, role) VALUES ($1, $2, $3)',
           [space.id, req.user.id, mode === 'create' ? 'owner' : 'member']);
-        await client.query('DELETE FROM household_data WHERE user_id = $1', [req.user.id]);
+        if (member.role !== 'reader') await client.query('DELETE FROM household_data WHERE user_id = $1', [req.user.id]);
         return {};
       });
       if (result.error) return res.status(result.status).json({ error: result.error });
@@ -364,7 +372,7 @@ function createApp(pool, config = process.env) {
         } : null
       };
     });
-    res.json({ users, allUsersAdmin: true });
+    res.json({ users, allUsersAdmin: false });
   }));
   app.post('/api/admin/users', ...admin(async (req, res) => {
     const email = accountName(req.body);
@@ -380,7 +388,23 @@ function createApp(pool, config = process.env) {
     res.status(result.status).json(result.error ? { error: result.error } : { user: publicUser(result.user) });
   }));
   app.post('/api/admin/users/:id/role', ...admin(async (req, res) => {
-    res.status(409).json({ error: 'Alla konton är administratörer. Rolländringar finns inte i den förenklade kontohanteringen.' });
+    const id = Number(req.params.id);
+    const role = req.body?.role;
+    if (!Number.isSafeInteger(id) || id < 1 || !['admin', 'user', 'reader'].includes(role)) {
+      return res.status(400).json({ error: 'Välj ett giltigt konto och rollen administratör, användare eller läsare.' });
+    }
+    const result = await adminTransaction(req, async (client, users) => {
+      const target = users.find(user => user.id === id);
+      if (!target) return { status: 404, error: 'Kontot hittades inte.' };
+      if (target.role === role) return { status: 200 };
+      if (target.role === 'admin' && role !== 'admin' && target.active && users.filter(user => user.active && user.role === 'admin').length === 1) {
+        return { status: 409, error: 'Den sista aktiva administratören kan inte få en lägre roll.' };
+      }
+      await client.query('UPDATE users SET role = $1 WHERE id = $2', [role, id]);
+      await audit(client, req.user.email, target.email, 'role_changed', role);
+      return { status: 200 };
+    });
+    res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
   }));
   app.post('/api/admin/users/:id/household-owner', ...admin(async (req, res) => {
     const id = Number(req.params.id);

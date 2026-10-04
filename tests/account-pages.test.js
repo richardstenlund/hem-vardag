@@ -47,6 +47,16 @@ test('admin audit initializes independently of the password form without invitat
   assert.equal(nodes.has('#invite-form'), false);
 });
 
+test('ordinary users cannot open account management', async () => {
+  const { nodes, requests } = await runPage('admin.js', {
+    '/api/me': { user: { id: 1, username: 'sven', role: 'user' } }
+  });
+  assert.deepEqual(requests, ['/api/me']);
+  assert.equal(nodes.get('#admin-create-form').hidden, true);
+  assert.equal(nodes.get('#admin-password-form').hidden, true);
+  assert.equal(nodes.get('#admin-audit').hidden, true);
+});
+
 test('optional account security does not block administration without MFA', async () => {
   const { nodes, requests } = await runPage('security.js', {
     '/api/me': { user: { id: 1, email: 'admin@example.test', role: 'admin' } },
@@ -58,4 +68,14 @@ test('optional account security does not block administration without MFA', asyn
   assert.equal(nodes.get('#setup-form').hidden, false);
   assert.equal(nodes.get('#factor-actions').hidden, true);
   assert.equal(nodes.get('#security-admin-link').hidden, false);
+});
+
+test('ordinary users retain optional security without an administration link', async () => {
+  const { nodes } = await runPage('security.js', {
+    '/api/me': { user: { id: 1, email: 'sven', role: 'user' } },
+    '/api/security': { enabled: false, required: false, verified: false, recoveryRemaining: 0 },
+    '/api/security/sessions': { sessions: [] }
+  });
+  assert.equal(nodes.get('#setup-form').hidden, false);
+  assert.equal(nodes.get('#security-admin-link').hidden, true);
 });

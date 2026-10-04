@@ -37,8 +37,42 @@
         const title = document.createElement('h2');
         title.textContent = account.email;
         const detail = document.createElement('p');
-        detail.textContent = `${account.role === 'admin' ? 'Administratör' : 'Användare'} · ${account.active ? 'Aktiv' : 'Inaktiverad'} · Tvåstegsverifiering ${account.twoFactorEnabled ? 'på' : 'av'} · Skapad ${new Date(account.created_at).toLocaleDateString('sv-SE')}`;
+        const roleNames = { admin: 'Administratör', user: 'Användare', reader: 'Läsare' };
+        detail.textContent = `${roleNames[account.role]} · ${account.active ? 'Aktiv' : 'Inaktiverad'} · Tvåstegsverifiering ${account.twoFactorEnabled ? 'på' : 'av'} · Skapad ${new Date(account.created_at).toLocaleDateString('sv-SE')}`;
         card.append(title, detail);
+        const roleButton = document.createElement('button');
+        roleButton.type = 'button';
+        roleButton.className = 'secondary-button';
+        const roleLabel = document.createElement('label');
+        roleLabel.className = 'form-field';
+        roleLabel.textContent = 'Roll';
+        const roleSelect = document.createElement('select');
+        for (const [role, name] of Object.entries(roleNames)) roleSelect.add(new Option(name, role));
+        roleSelect.value = account.role;
+        roleLabel.append(roleSelect);
+        roleButton.textContent = 'Spara roll';
+        const lastAdmin = account.role === 'admin' && account.active && users.filter(person => person.active && person.role === 'admin').length === 1;
+        roleSelect.disabled = lastAdmin;
+        roleButton.disabled = lastAdmin;
+        roleButton.addEventListener('click', async () => {
+          const nextRole = roleSelect.value;
+          if (nextRole === account.role) return;
+          const permission = nextRole === 'admin' ? 'Kontot kan hantera andra konton och redigera sina listor.'
+            : nextRole === 'user' ? 'Kontot kan redigera sina listor men inte hantera konton.'
+              : 'Kontot kan bara läsa sina listor och inte hantera konton.';
+          if (!confirm(`Gör ${account.email} till ${roleNames[nextRole].toLowerCase()}? ${permission}${account.id === user.id && nextRole !== 'admin' ? ' Du förlorar själv åtkomst till kontohanteringen.' : ''}`)) return;
+          roleButton.disabled = true;
+          const feedback = document.querySelector('#admin-role-status');
+          try {
+            await api(`/admin/users/${account.id}/role`, { method: 'POST', body: JSON.stringify({ role: nextRole }) });
+            feedback.textContent = `${account.email} är nu ${roleNames[nextRole].toLowerCase()}.`;
+            await load();
+          } catch (error) {
+            feedback.textContent = error.message;
+            roleButton.disabled = false;
+          }
+        });
+        card.append(roleLabel, roleButton);
         const activeButton = document.createElement('button');
         activeButton.type = 'button';
         activeButton.className = 'secondary-button';

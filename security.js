@@ -36,7 +36,7 @@
     $('#security-content').hidden = false;
     $('#two-factor-description').textContent = state.enabled
       ? 'Tvåstegsverifiering är aktiverad. Vid inloggning behöver du även en appkod eller återställningskod.'
-      : 'Tvåstegsverifiering är valfri för alla konton. Du kan använda sidan och administrera konton utan att aktivera den.';
+      : 'Tvåstegsverifiering är valfri för alla konton. Administratörer kan hantera konton utan att aktivera den.';
     $('#setup-form').hidden = state.enabled;
     $('#verify-form').hidden = !state.enabled || state.verified;
     $('#factor-actions').hidden = !state.enabled || !state.verified || !$('#recovery-result').hidden;
