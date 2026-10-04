@@ -33,7 +33,8 @@ test('installer uses chosen admin credentials and preserves literal dollar signs
   assert.equal(result.status, 0, result.stderr);
   assert.ok(contents.includes("ADMIN_EMAIL='chosen@example.test'"));
   assert.ok(contents.includes(`ADMIN_PASSWORD='${password}'`));
-  assert.ok(contents.includes('ALLOW_REGISTRATION=true\nALL_USERS_ADMIN=false\n'));
+  assert.ok(contents.includes('ALLOW_REGISTRATION=true\n'));
+  assert.doesNotMatch(contents, /ALL_USERS_ADMIN/);
   assert.doesNotMatch(contents, /INVITE_ONLY/);
   assert.doesNotMatch(result.stdout, /Chosen/);
 });

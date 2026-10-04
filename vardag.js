@@ -1118,7 +1118,7 @@
 			await loadAccountData(guestData);
 			closeModal('auth-modal');
 			$('#auth-form').reset();
-			showToast(currentUser.requiresTwoFactorSetup ? 'Aktivera tvåstegsverifiering under Kontosäkerhet för att administrera konton.' : 'Listorna är nu kopplade till ditt konto.');
+			showToast('Du är inloggad och kan nu använda sidan och administrera konton.');
 		} catch (error) {
 			$('#auth-error').textContent = error.message;
 			showToast(error.message);

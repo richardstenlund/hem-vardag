@@ -28,8 +28,8 @@
         status.textContent = 'Logga in som administratör på startsidan för att hantera konton.';
         return;
       }
-      const { users, allUsersAdmin } = await api('/admin/users');
-      document.querySelector('#admin-mode').hidden = !allUsersAdmin;
+      const { users } = await api('/admin/users');
+      document.querySelector('#admin-mode').hidden = false;
       for (const account of users) {
         const card = document.createElement('article');
         card.className = 'item-card';
@@ -38,31 +38,6 @@
         const detail = document.createElement('p');
         detail.textContent = `${account.role === 'admin' ? 'Administratör' : 'Användare'} · ${account.active ? 'Aktiv' : 'Inaktiverad'} · Tvåstegsverifiering ${account.twoFactorEnabled ? 'på' : 'av'} · Skapad ${new Date(account.created_at).toLocaleDateString('sv-SE')}`;
         card.append(title, detail);
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'secondary-button';
-        button.textContent = account.role === 'admin' ? 'Gör till användare' : 'Gör till administratör';
-        button.disabled = account.active && account.role === 'admin' && users.filter(person => person.role === 'admin' && person.active).length === 1;
-        if (button.disabled) button.title = 'Utse en annan administratör först.';
-        button.addEventListener('click', async () => {
-          const role = account.role === 'admin' ? 'user' : 'admin';
-          const message = role === 'admin'
-            ? `Göra ${account.email} till administratör? Kontot får hantera alla användares roller och lösenord.`
-            : `Göra ${account.email} till vanlig användare?${account.id === user.id ? ' Du förlorar själv åtkomsten till kontohanteringen.' : ''}`;
-          if (!confirm(message)) return;
-          button.disabled = true;
-          const feedback = document.querySelector('#admin-role-status');
-          feedback.textContent = '';
-          try {
-            await api(`/admin/users/${account.id}/role`, { method: 'POST', body: JSON.stringify({ role }) });
-            feedback.textContent = `${account.email} är nu ${role === 'admin' ? 'administratör' : 'vanlig användare'}.`;
-            await load();
-          } catch (error) {
-            feedback.textContent = error.message;
-            button.disabled = false;
-          }
-        });
-        if (!allUsersAdmin) card.append(button);
         const activeButton = document.createElement('button');
         activeButton.type = 'button';
         activeButton.className = 'secondary-button';

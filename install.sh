@@ -68,7 +68,6 @@ APP_URL=${APP_URL_VALUE}
 SESSION_DAYS=30
 SECURE_COOKIES=false
 ALLOW_REGISTRATION=true
-ALL_USERS_ADMIN=false
 EOF
 else
   printf '.env finns redan och lämnas orörd.\n'
@@ -86,6 +85,6 @@ done
 [ "$READY" -eq 1 ] || die "Webbappen svarar inte. Kör: cd $INSTALL_DIR && docker compose logs web db"
 printf '\nHem & vardag är installerat!\nÖppna: %s\n' "$(get_env APP_URL)"
 if [ "$CREATED_ENV" -eq 1 ]; then
-  printf 'Administratören har skapats med dina valda uppgifter.\nAktivera tvåstegsverifiering under Kontosäkerhet efter inloggning.\n'
+  printf 'Administratören har skapats med dina valda uppgifter.\nAlla kan skapa konto med e-post och lösenord och får administratörsbehörighet.\n'
 fi
 printf 'Uppdatera: cd %s && git pull --ff-only && docker compose up -d --build\n' "$INSTALL_DIR"

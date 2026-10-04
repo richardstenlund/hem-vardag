@@ -14,8 +14,8 @@ En fristående svensk hemsida för livet hemma: recept, anteckningar, sysslor, i
 - Räkningar, registrerade utgifter och månadssummering.
 - Kalender över daterade poster, dokumentlänkar och checklistmallar.
 - Egna användarkonton och delat hushåll för upp till 10 personer via inbjudningskod.
-- Enkel registrering med e-post och lösenord, manuella roller, inaktivering, sessionshantering och administrativ aktivitetslogg.
-- Tvåstegsverifiering med autentiseringsapp och engångsåterställningskoder; obligatorisk för administratörer.
+- Enkel registrering med e-post och lösenord; alla konton är administratörer. Inaktivering, sessionshantering och administrativ aktivitetslogg.
+- Valfri tvåstegsverifiering med autentiseringsapp och engångsåterställningskoder.
 - JSON-backup och återställning av listor.
 
 Gäster sparar lokalt på sin enhet. Inloggade användare sparar i PostgreSQL. Listorna blir bara gemensamma om man går med i samma hushåll; då delas **alla hushållslistor**, även anteckningar, dokumentlänkar och utgifter. Sidan kontrollerar versionen vid sparande så att gamla kopior inte skriver över nyare ändringar. Vid konflikt: ta Backup, ladda om och återställ de poster du vill behålla.
@@ -104,15 +104,15 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 1. Öppna sidan via serveradressen, **inte genom att dubbelklicka på HTML-filen**.
 2. Tryck **Logga in** och använd admin-uppgifterna från `.env` eller installationsskriptet.
 3. Välj **Byt lösenord** i menyn och sätt ett eget lösenord. På mobil finns länken i toppfältet.
-4. Öppna **Kontosäkerhet**, skapa en autentiseringsnyckel med ditt nuvarande lösenord, skanna QR-koden med en autentiseringsapp och bekräfta appkoden. **Spara återställningskoderna privat innan du lämnar sidan.** Administratörer måste aktivera detta innan de kan administrera konton.
+4. Du kan använda sidan och **Administrera konton** direkt efter inloggning. **Kontosäkerhet** innehåller valfri tvåstegsverifiering och dina inloggningar.
 5. Andra personer trycker **Skapa konto** direkt i toppfältet, fyller i e-post och lösenord (minst 8 tecken) och trycker **Skapa konto**. De loggas in direkt. Ingen kontoinbjudan behövs.
 6. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 7. Administratören kan återställa glömda lösenord. Inga hushållslistor visas i adminpanelen. Lösenordsåterställning stänger kontots inloggningar men tar inte bort tvåstegsverifieringen.
-8. **Manuella roller är standard.** Befintliga konton behåller sina roller och nya konton blir vanliga användare. Välj **Gör till administratör** eller **Gör till användare** och bekräfta. Minst en aktiv administratör måste finnas kvar. Roller gäller direkt; en ny administratör måste aktivera tvåstegsverifiering för att få tillgång till kontohanteringen.
+8. **Alla konton är administratörer.** Befintliga konton får rollen vid serverstart och nya konton får den direkt. Det finns inga rollknappar eller krav på tvåstegsverifiering. Minst ett aktivt konto måste finnas kvar.
 9. Använd helst **Inaktivera konto** när någon inte längre ska ha åtkomst. Alla sessioner avslutas och nya inloggningar blockeras, men kontot och listorna behålls. **Aktivera konto** tillåter inloggning igen. Hushållsmedlemskap behålls; övriga medlemmar kan fortsätta använda de delade listorna. Den sista aktiva administratören kan inte inaktiveras, tas bort eller nedgraderas.
 10. **Ta bort användare** raderar kontot, dess privata listor och alla inloggningar permanent. Ta först en databasbackup. Delade listor behålls när en medlem tas bort. Äger kontot ett hushåll måste du först välja en annan medlem och **Överför ägarskap**. Om hushållet saknar andra medlemmar behöver ägaren bjuda in någon först. Kontot i `ADMIN_EMAIL` är skyddat eftersom det annars återskapas vid omstart; byt inställningen till en annan administratör före borttagning.
 
-**Uppgradering från läget där alla var administratörer:** sätt `ALL_USERS_ADMIN=false` i `.env` och kör `docker compose up -d --build`. Tidigare administratörer behåller rollen tills du ändrar den i kontohanteringen. `ALL_USERS_ADMIN=true` går fortfarande att aktivera, men då får alla konton administratörsbehörighet och manuella rolländringar stängs av. Med öppen registrering kan vem som helst som når sidan då ta över andra konton genom att återställa deras lösenord.
+**Viktigt:** alla som når öppen registrering kan skapa ett administratörskonto och ändra andra kontons lösenord, inaktivera eller ta bort dem. Använd därför sidan endast i en betrodd miljö, exempelvis hemma eller bakom VPN. Tvåstegsverifiering skyddar inloggning till det egna kontot men begränsar inte andra administratörers kontobehörigheter.
 
 | Logga in eller skapa konto | Anpassad djurprofil |
 |---|---|
@@ -122,11 +122,11 @@ Admin-kontot skapas vid start om e-postadressen inte finns. En omstart ändrar *
 
 ### Enkel registrering och standardadministratör
 
-Standardadministratören skapas vid serverstart med `ADMIN_EMAIL` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord, roll eller tvåstegsverifiering; använd kontohanteringen för befintliga konton.
+Standardadministratören skapas vid serverstart med `ADMIN_EMAIL` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord eller tvåstegsverifiering. Alla befintliga konton blir administratörer utan att avstängda konton aktiveras.
 
-`ALLOW_REGISTRATION=true` låter personer skapa konto med bara e-post och lösenord. Nya konton blir vanliga användare med egna privata listor när `ALL_USERS_ADMIN=false`. Administratörer kan ändra roller senare. Hushållets delningskod finns kvar för att dela listor; registrering ansluter inte automatiskt någon till ett hushåll.
+`ALLOW_REGISTRATION=true` låter personer skapa konto med bara e-post och lösenord. Alla får administratörsbehörighet direkt och kan hantera konton utan extra inställningar. Listorna är fortfarande privata tills man delar hushåll. Hushållets delningskod finns kvar för att dela listor; registrering ansluter inte automatiskt någon till ett hushåll. Gamla `ALL_USERS_ADMIN`-inställningar ignoreras.
 
-Kontoinbjudningsfunktionen är borttagen. Gamla inbjudningslänkar och API-adresser fungerar inte längre och `INVITE_ONLY` används inte, även om den finns kvar i en äldre `.env`. Befintliga konton och historiska logghändelser behålls; en äldre inbjudningstabell lämnas oanvänd utan att data raderas vid uppgradering. Sätt `ALLOW_REGISTRATION=false` om du vill stänga registreringen. När den är öppen kan alla som når sidan registrera sig; använd HTTPS och håll administratörsrollerna begränsade.
+Kontoinbjudningsfunktionen är borttagen. Gamla inbjudningslänkar och API-adresser fungerar inte längre och `INVITE_ONLY` används inte, även om den finns kvar i en äldre `.env`. Befintliga konton och historiska logghändelser behålls; en äldre inbjudningstabell lämnas oanvänd utan att data raderas vid uppgradering. Sätt `ALLOW_REGISTRATION=false` om du vill stänga registreringen. När den är öppen kan alla som når sidan registrera sig och administrera alla konton.
 
 Om det gamla fältet **Kontoinbjudan** fortfarande visas: uppdatera installationen med `bash update.sh` och ladda sedan om sidan med Ctrl+F5 (eller stäng och öppna sidan på mobilen). Sidfilerna måste kontrolleras mot servern vid laddning, och offline-cachen byts vid denna uppgradering. Rensa inte webbplatsdata som första åtgärd: osynkade gästlistor kan då försvinna.
 
@@ -140,11 +140,11 @@ Om containern har den nya versionen men fältet fortfarande visas, kontrollera a
 
 ### Tvåstegsverifiering och inloggningar
 
-- Välj **Kontosäkerhet** på startsidan. Administratörer måste använda tvåstegsverifiering; övriga kan aktivera den frivilligt.
+- Välj **Kontosäkerhet** på startsidan om du vill aktivera tvåstegsverifiering. Den är valfri för alla. Befintlig aktiverad verifiering behålls vid uppdatering; den kan stängas av med ditt lösenord och en appkod eller återställningskod.
 - QR-koder genereras lokalt på servern, utan extern QR-tjänst. Nyckeln visas bara under aktiveringen. Bekräfta inom 10 minuter.
-- Vid inloggning: ange först e-post och lösenord, sedan appkod eller återställningskod. En appkod kan inte återanvändas; vänta på nästa kod om du nyss använt den. Serverns och telefonens klockor måste vara rätt.
+- Om du har aktiverat tvåstegsverifiering: ange först e-post och lösenord, sedan appkod eller återställningskod. Annars behövs bara e-post och lösenord. En appkod kan inte återanvändas; vänta på nästa kod om du nyss använt den. Serverns och telefonens klockor måste vara rätt.
 - Varje återställningskod fungerar en gång. **Skapa nya återställningskoder** kräver lösenord och appkod eller befintlig återställningskod och gör alla gamla koder ogiltiga. Ladda ned eller skriv ned dem och förvara separat från telefonen.
-- Om telefonen försvinner: logga in med en återställningskod. Under **Kontosäkerhet** väljer du **Byt autentiseringsapp eller nyckel** och anger lösenord samt en annan återställningskod. Skanna den nya QR-koden, bekräfta och spara de nya återställningskoderna. Den gamla appen fungerar tills den nya är bekräftad; därefter ersätts nyckeln och andra inloggningar avslutas. Administratörer kan byta app men inte stänga av tvåstegsverifieringen.
+- Om telefonen försvinner: logga in med en återställningskod. Under **Kontosäkerhet** väljer du **Byt autentiseringsapp eller nyckel** och anger lösenord samt en annan återställningskod. Skanna den nya QR-koden, bekräfta och spara de nya återställningskoderna. Du kan också välja **Stäng av tvåstegsverifiering** med lösenord och giltig kod.
 - Om både appen och samtliga återställningskoder är förlorade krävs hjälp av den som administrerar servern; det finns ingen osäker automatisk förbikoppling via lösenordsåterställning. Ha gärna två administratörer och en säker backup.
 - Aktivering avslutar andra inloggningar. Äldre sessioner som saknar verifiering måste bekräftas under **Kontosäkerhet**.
 - **Dina inloggningar** visar webbläsare, skapandetid och giltighetstid. Avsluta en inloggning, logga ut här eller välj **Logga ut alla andra enheter**. Inloggningstokens visas aldrig.
@@ -155,7 +155,7 @@ Adminpanelen visar aktör, berört konto, tid och åtgärd för rolländringar, 
 
 ### Rekommenderad användarhantering
 
-Ge varje person ett eget konto. Ha en huvudadministratör och en reserv, och ge övriga användarrollen. Hushållsägaren behöver inte vara administratör för hela sidan. Inaktivera hellre än att radera direkt, ta backup före borttagning och använd HTTPS vid åtkomst utanför hemmet. Ge bara administratörsbehörighet till personer du litar på.
+Ge varje person ett eget konto och släpp endast in personer du litar på, eftersom alla får administratörsbehörighet. Inaktivera hellre än att radera direkt, ta backup före borttagning och begränsa nätverksåtkomst till hemnät eller VPN. Använd HTTPS om sidan nås utanför hemmet.
 
 ## Inställningar
 
@@ -167,7 +167,6 @@ Ge varje person ett eget konto. Ha en huvudadministratör och en reserv, och ge 
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Egna databasuppgifter. Byt inte efter installation utan databasadministration |
 | `SECURE_COOKIES` | `false` för HTTP hemma, `true` bakom HTTPS |
 | `ALLOW_REGISTRATION` | `true` låter användare skapa konton; `false` stänger registreringen |
-| `ALL_USERS_ADMIN` | Standard `false`: manuella roller, nya konton blir användare. `true` gör alla konton till administratörer vid start och registrering |
 | `SESSION_DAYS` | Hur länge inloggningen gäller; standard 30 dagar |
 
 Efter ändring: `docker compose up -d`. Lägg aldrig `.env` eller databasbackuper på GitHub.
@@ -186,7 +185,7 @@ git pull --ff-only
 docker compose up -d --build
 ```
 
-Listor och konton ligger kvar i databasvolymen. Kontosäkerhetens tabeller och kolumner läggs till automatiskt vid start; befintliga roller, lösenord och hushåll bevaras. Befintliga administratörer behöver aktivera tvåstegsverifiering innan de kan öppna adminpanelen. Sätt `ALL_USERS_ADMIN=false` och `ALLOW_REGISTRATION=true` i `.env` för manuella roller och enkel registrering. Stoppa med `docker compose down`. **Använd inte `docker compose down -v`** om du vill behålla databasen och backuperna.
+Listor och konton ligger kvar i databasvolymen. Alla befintliga konton blir administratörer vid serverstart; lösenord, hushåll och kontostatus bevaras. Tvåstegsverifiering krävs inte längre men befintlig aktiverad verifiering behålls. `INVITE_ONLY` och `ALL_USERS_ADMIN` används inte längre. Sätt `ALLOW_REGISTRATION=true` för enkel registrering. Stoppa med `docker compose down`. **Använd inte `docker compose down -v`** om du vill behålla databasen och backuperna.
 
 ## Säkerhetskopiering
 

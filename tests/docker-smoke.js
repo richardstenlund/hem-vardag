@@ -52,7 +52,8 @@ async function main() {
   assert.equal(joined.status, 200);
   assert.deepEqual(joined.body.data, data);
   assert.equal((await request('/api/household', { method: 'PUT', cookie: owner.cookie, body: { data: {}, version: space.body.version } })).status, 409);
-  assert.equal(owner.body.user.role, 'user');
+  assert.equal(owner.body.user.role, 'admin');
+  assert.equal((await request('/api/admin/users', { cookie: owner.cookie })).status, 200);
   assert.equal((await request(`/api/admin/users/${member.body.user.id}/active`, {
     method: 'POST', cookie: admin.cookie, body: { active: false }
   })).status, 200);

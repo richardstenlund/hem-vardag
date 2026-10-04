@@ -51,11 +51,12 @@ async function fixture(t, config = {}) {
   return { pool, request, post, login, register, enroll, admin };
 }
 
-test('admins must enroll and MFA login cannot be bypassed; recovery codes work once', async t => {
+test('MFA is optional but enrolled accounts cannot bypass it; recovery codes work once', async t => {
   const { pool, request, post, login, enroll } = await fixture(t);
   const first = await login('admin@example.test', 'Adminpassword123!');
-  assert.equal(first.json.user.requiresTwoFactorSetup, true);
-  assert.equal((await request('/api/admin/users', { cookie: first.cookie })).status, 403);
+  assert.equal(first.json.user.requiresTwoFactorSetup, false);
+  assert.equal((await request('/api/admin/users', { cookie: first.cookie })).status, 200);
+  assert.equal((await request('/api/security', { cookie: first.cookie })).json.required, false);
   const oldSession = await login('admin@example.test', 'Adminpassword123!');
   assert.equal((await post('/api/security/setup', { password: 'wrong' }, first.cookie)).status, 401);
   const factor = await enroll(first.cookie, 'Adminpassword123!');
@@ -64,7 +65,6 @@ test('admins must enroll and MFA login cannot be bypassed; recovery codes work o
   assert.equal(listed.status, 200);
   assert.equal(listed.json.users[0].twoFactorEnabled, true);
   assert.doesNotMatch(JSON.stringify(listed.json), new RegExp(factor.secret));
-  assert.equal((await post('/api/security/disable', { password: 'Adminpassword123!', code: factor.codes[0] }, first.cookie)).status, 409);
   const challenge = await login('admin@example.test', 'Adminpassword123!');
   assert.deepEqual(challenge.json, { requiresTwoFactor: true });
   assert.equal(challenge.cookie, undefined);
@@ -86,7 +86,8 @@ test('registration needs only email and password and ignores retired invitation 
   const owner = await admin();
   const registered = await register('Person@example.test');
   assert.equal(registered.status, 201);
-  assert.equal(registered.json.user.role, 'user');
+  assert.equal(registered.json.user.role, 'admin');
+  assert.equal((await request('/api/admin/users', { cookie: registered.cookie })).status, 200);
   assert.equal(registered.json.user.email, 'person@example.test');
   assert.equal(registered.json.user.requiresTwoFactorSetup, false);
   assert.equal((await request('/api/me', { cookie: registered.cookie })).json.user.id, registered.json.user.id);
@@ -107,7 +108,7 @@ test('account suspension revokes access without losing data; last active admin s
   const data = { notes: [{ id: 'keep', title: 'Behåll' }] };
   await request('/api/household', { method: 'PUT', cookie: person.cookie, body: { data, version: first.json.version } });
   const activePath = `/api/admin/users/${person.json.user.id}/active`;
-  assert.equal((await post(activePath, { active: false }, person.cookie)).status, 403);
+  assert.equal((await post(activePath, { active: false })).status, 401);
   assert.equal((await post(activePath, { active: 'false' }, owner.cookie)).status, 400);
   assert.equal((await post(activePath, { active: false }, owner.cookie)).status, 200);
   assert.equal((await request('/api/me', { cookie: person.cookie })).json.user, null);
@@ -117,10 +118,7 @@ test('account suspension revokes access without losing data; last active admin s
   const restored = await login('person@example.test', 'Testpassword123!');
   assert.equal(restored.status, 200);
   assert.deepEqual((await request('/api/household', { cookie: restored.cookie })).json.data, data);
-  assert.equal((await post(`/api/admin/users/${owner.json.user.id}/active`, { active: false }, owner.cookie)).status, 409);
-  await post(`/api/admin/users/${person.json.user.id}/role`, { role: 'admin' }, owner.cookie);
-  assert.equal((await request('/api/admin/users', { cookie: restored.cookie })).status, 403);
-  await enroll(restored.cookie, 'Testpassword123!');
+  assert.equal((await request('/api/admin/users', { cookie: restored.cookie })).status, 200);
   assert.equal((await post(activePath, { active: false }, owner.cookie)).status, 200);
   assert.equal((await post(`/api/admin/users/${owner.json.user.id}/active`, { active: false }, owner.cookie)).status, 409);
   assert.equal((await post(`/api/admin/users/${owner.json.user.id}/role`, { role: 'user' }, owner.cookie)).status, 409);
@@ -176,7 +174,7 @@ test('audit records actor, target and action; survives removal and never include
   await request(`/api/admin/users/${person.json.user.id}`, { method: 'DELETE', cookie: owner.cookie, body: { email: person.json.user.email } });
   const log = await request('/api/admin/audit', { cookie: owner.cookie });
   assert.equal(log.status, 200);
-  for (const action of ['role_changed', 'password_reset', 'account_deleted']) {
+  for (const action of ['password_reset', 'account_deleted']) {
     assert.ok(log.json.events.some(item => item.action === action && item.actor_email === 'admin@example.test' && item.target_email === 'audit@example.test'));
   }
   assert.doesNotMatch(JSON.stringify(log.json), /NeverLogThisPassword|Adminpassword123|recovery_json|totp_secret/);

@@ -36,14 +36,13 @@
     $('#security-content').hidden = false;
     $('#two-factor-description').textContent = state.enabled
       ? 'Tvåstegsverifiering är aktiverad. Vid inloggning behöver du även en appkod eller återställningskod.'
-      : state.required ? 'Du är administratör och måste aktivera tvåstegsverifiering innan du kan administrera konton.'
-        : 'Tvåstegsverifiering är valfri för ditt konto och ger extra skydd.';
+      : 'Tvåstegsverifiering är valfri för alla konton. Du kan använda sidan och administrera konton utan att aktivera den.';
     $('#setup-form').hidden = state.enabled;
     $('#verify-form').hidden = !state.enabled || state.verified;
     $('#factor-actions').hidden = !state.enabled || !state.verified || !$('#recovery-result').hidden;
     $('#disable-factor').hidden = state.required;
     $('#recovery-count').textContent = `${state.recoveryRemaining} återställningskoder kvar.`;
-    $('#security-admin-link').hidden = !state.required || !state.enabled || !state.verified;
+    $('#security-admin-link').hidden = user.role !== 'admin' || (state.enabled && !state.verified);
     $('#sessions-section').hidden = state.enabled && !state.verified;
     if (!$('#sessions-section').hidden) await loadSessions();
   }

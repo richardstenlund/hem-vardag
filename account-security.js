@@ -69,7 +69,7 @@ function mountSecurity(app, tools) {
   app.get('/api/security', ...authenticated(async (req, res) => {
     const { rows: [security] } = await pool.query('SELECT recovery_json FROM user_security WHERE user_id = $1', [req.user.id]);
     res.json({
-      enabled: Boolean(req.user.totp_secret), required: req.user.role === 'admin',
+      enabled: Boolean(req.user.totp_secret), required: false,
       verified: req.user.mfa_verified, recoveryRemaining: security ? JSON.parse(security.recovery_json).length : 0
     });
   }));
@@ -124,8 +124,7 @@ function mountSecurity(app, tools) {
   app.post('/api/security/disable', ...secureAction(async (req, res) => {
     if (!passwordCheck(req.body?.password, req.user)) return res.status(401).json({ error: 'Lösenordet stämmer inte.' });
     const result = await transaction(async client => {
-      const { rows: [user] } = await client.query('SELECT role FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
-      if (user.role === 'admin') return { status: 409, error: 'Administratörer måste ha tvåstegsverifiering.' };
+      await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
       if (!await consumeFactor(client, req.user.id, req.body?.code)) return { status: 401, error: 'Koden stämmer inte eller har redan använts.' };
       await client.query('DELETE FROM user_security WHERE user_id = $1', [req.user.id]);
       await client.query('DELETE FROM sessions WHERE user_id = $1 AND id <> $2', [req.user.id, req.user.session_id]);

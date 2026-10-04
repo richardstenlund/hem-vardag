@@ -10,10 +10,9 @@ const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) =
 });
 const publicUser = user => ({
   id: user.id, email: user.email, role: user.role,
-  twoFactorEnabled: Boolean(user.totp_secret), requiresTwoFactorSetup: user.role === 'admin' && !user.totp_secret
+  twoFactorEnabled: Boolean(user.totp_secret), requiresTwoFactorSetup: false
 });
 const dataLimit = 1024 * 1024;
-const allUsersAdmin = config => config.ALL_USERS_ADMIN === 'true';
 
 async function initDatabase(pool, config = process.env) {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -53,7 +52,7 @@ async function initDatabase(pool, config = process.env) {
       `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, 'admin')
        ON CONFLICT (email) DO NOTHING`, [email, hash, salt]);
   }
-  if (allUsersAdmin(config)) await pool.query("UPDATE users SET role = 'admin' WHERE role <> 'admin'");
+  await pool.query("UPDATE users SET role = 'admin' WHERE role <> 'admin'");
 }
 
 function mergeHouseholdData(primary, secondary) {
@@ -113,9 +112,6 @@ function createApp(pool, config = process.env) {
   const authenticated = handler => [requireUser, asyncRoute(handler)];
   const admin = handler => authenticated(async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Administratörsbehörighet krävs.' });
-    if (!req.user.totp_secret || !req.user.mfa_verified) {
-      return res.status(403).json({ error: 'Aktivera tvåstegsverifiering under Kontosäkerhet innan du administrerar konton.' });
-    }
     await handler(req, res);
   });
   function cookie(res, value, age) {
@@ -157,13 +153,16 @@ function createApp(pool, config = process.env) {
   }
   async function adminTransaction(req, action) {
     return transaction(async client => {
-      // Serialize account removal and role changes, including concurrent admin requests.
+      // Serialize account removal and suspension, including concurrent admin requests.
       const { rows: users } = await client.query('SELECT id, email, role, active FROM users ORDER BY id FOR UPDATE');
       if (!users.some(user => user.id === req.user.id && user.role === 'admin' && user.active)) {
         return { status: 403, error: 'Administratörsbehörighet krävs.' };
       }
       const { rows: [session] } = await client.query('SELECT mfa_verified FROM sessions WHERE id = $1', [req.user.session_id]);
-      if (!session?.mfa_verified) return { status: 403, error: 'Inloggningen är inte längre giltig. Logga in igen.' };
+      const { rows: [security] } = await client.query('SELECT totp_secret FROM user_security WHERE user_id = $1', [req.user.id]);
+      if (!session || (security?.totp_secret && !session.mfa_verified)) {
+        return { status: 403, error: 'Inloggningen är inte längre giltig. Logga in igen.' };
+      }
       return action(client, users);
     });
   }
@@ -216,7 +215,7 @@ function createApp(pool, config = process.env) {
       if (users.some(user => user.email === email)) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
       const { rows: [user] } = await client.query(
         `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt, allUsersAdmin(config) ? 'admin' : 'user']);
+         ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt, 'admin']);
       if (!user) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
       await createSession(user.id, res, req, false, client);
       return { status: 201, user };
@@ -356,28 +355,10 @@ function createApp(pool, config = process.env) {
         } : null
       };
     });
-    res.json({ users, allUsersAdmin: allUsersAdmin(config) });
+    res.json({ users, allUsersAdmin: true });
   }));
   app.post('/api/admin/users/:id/role', ...admin(async (req, res) => {
-    const id = Number(req.params.id);
-    const role = req.body?.role;
-    if (!Number.isSafeInteger(id) || id < 1 || !['admin', 'user'].includes(role)) {
-      return res.status(400).json({ error: 'Ange giltigt konto och rollen admin eller user.' });
-    }
-    if (allUsersAdmin(config) && role === 'user') {
-      return res.status(409).json({ error: 'Alla konton ska vara administratörer. Stäng av ALL_USERS_ADMIN innan du ändrar till vanlig användare.' });
-    }
-    const result = await adminTransaction(req, async (client, users) => {
-      const target = users.find(user => user.id === id);
-      if (!target) return { status: 404, error: 'Kontot hittades inte.' };
-      if (target.active && target.role === 'admin' && role === 'user' && users.filter(user => user.role === 'admin' && user.active).length === 1) {
-        return { status: 409, error: 'Den sista administratören kan inte göras till vanlig användare. Utse en annan administratör först.' };
-      }
-      const { rows: [user] } = await client.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, email, role', [role, id]);
-      await audit(client, req.user.email, target.email, 'role_changed', role);
-      return { status: 200, user };
-    });
-    res.status(result.status).json(result.error ? { error: result.error } : { user: result.user });
+    res.status(409).json({ error: 'Alla konton är administratörer. Rolländringar finns inte i den förenklade kontohanteringen.' });
   }));
   app.post('/api/admin/users/:id/household-owner', ...admin(async (req, res) => {
     const id = Number(req.params.id);
