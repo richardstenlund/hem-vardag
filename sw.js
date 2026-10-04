@@ -1,7 +1,7 @@
-const cacheName = 'hem-vardag-v2';
+const cacheName = 'hem-vardag-v3';
 const appShell = ['/', '/vardag.html', '/vardag.css', '/vardag.js', '/manifest.webmanifest'];
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(appShell)));
+  event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(appShell.map(url => new Request(url, { cache: 'reload' })))));
   self.skipWaiting();
 });
 self.addEventListener('activate', event => {
@@ -11,5 +11,5 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
   if (!appShell.includes(url.pathname)) return;
-  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+  event.respondWith(fetch(event.request, { cache: 'no-cache' }).catch(() => caches.match(event.request)));
 });

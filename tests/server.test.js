@@ -56,6 +56,15 @@ test('standalone home, health, assets and no training API', async t => {
   const { request } = await fixture(t);
   assert.match((await request('/')).json, /<title>Hem & vardag<\/title>/);
   assert.doesNotMatch((await request('/')).json, /Formkurva|MyHome/);
+  for (const route of ['/', '/vardag.html']) {
+    const page = await request(route);
+    assert.equal(page.response.headers.get('cache-control'), 'no-cache');
+    assert.doesNotMatch(page.json, /invite-field|inviteToken|Kontoinbjudan/);
+    assert.match(page.json, /id="register-button"/);
+  }
+  for (const route of ['/vardag.js', '/sw.js', '/admin.html', '/admin.js']) {
+    assert.equal((await request(route)).response.headers.get('cache-control'), 'no-cache');
+  }
   assert.equal((await request('/api/health')).json.application, 'hem-vardag');
   for (const asset of ['/vardag.js', '/vardag.css', '/admin.js', '/sw.js']) assert.equal((await request(asset)).status, 200);
   for (const route of ['/MyHome.html', '/server.js', '/.env', '/api/workouts', '/api/measurements']) assert.equal((await request(route)).status, 404);

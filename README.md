@@ -128,6 +128,16 @@ Standardadministratören skapas vid serverstart med `ADMIN_EMAIL` och `ADMIN_PAS
 
 Kontoinbjudningsfunktionen är borttagen. Gamla inbjudningslänkar och API-adresser fungerar inte längre och `INVITE_ONLY` används inte, även om den finns kvar i en äldre `.env`. Befintliga konton och historiska logghändelser behålls; en äldre inbjudningstabell lämnas oanvänd utan att data raderas vid uppgradering. Sätt `ALLOW_REGISTRATION=false` om du vill stänga registreringen. När den är öppen kan alla som når sidan registrera sig; använd HTTPS och håll administratörsrollerna begränsade.
 
+Om det gamla fältet **Kontoinbjudan** fortfarande visas: uppdatera installationen med `bash update.sh` och ladda sedan om sidan med Ctrl+F5 (eller stäng och öppna sidan på mobilen). Sidfilerna måste kontrolleras mot servern vid laddning, och offline-cachen byts vid denna uppgradering. Rensa inte webbplatsdata som första åtgärd: osynkade gästlistor kan då försvinna.
+
+Kontrollera formuläret i den körande webbcontainern:
+
+```bash
+docker compose exec -T web node -e "fetch('http://127.0.0.1:3000/').then(r=>r.text()).then(html=>{if(html.includes('inviteToken')||html.includes('invite-field')){console.error('Gammal version: inbjudningsfältet finns kvar');process.exitCode=1}else{console.log('Ny version: ingen kontoinbjudan i formuläret')}}).catch(e=>{console.error(e);process.exitCode=1})"
+```
+
+Om containern har den nya versionen men fältet fortfarande visas, kontrollera att webbläsaren använder rätt serveradress och port och att eventuell reverse proxy inte serverar en gammal cachad sida. Hushållets delningskod är separat och finns kvar.
+
 ### Tvåstegsverifiering och inloggningar
 
 - Välj **Kontosäkerhet** på startsidan. Administratörer måste använda tvåstegsverifiering; övriga kan aktivera den frivilligt.

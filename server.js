@@ -186,10 +186,14 @@ function createApp(pool, config = process.env) {
     if (!allowed.includes(origin)) return res.status(403).json({ error: 'Anropet blockerades av säkerhetsskäl.' });
     next();
   });
-  app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'vardag.html')));
+  app.get('/', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(__dirname, 'vardag.html'));
+  });
   const publicFiles = new Set(['vardag.html', 'vardag.css', 'vardag.js', 'admin.html', 'admin.js', 'security.html', 'security.js', 'sw.js', 'manifest.webmanifest']);
   app.get('/:file', (req, res, next) => {
     if (!publicFiles.has(req.params.file)) return next();
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(__dirname, req.params.file));
   });
   app.get('/api/health', asyncRoute(async (req, res) => {
