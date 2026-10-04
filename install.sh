@@ -52,6 +52,7 @@ SESSION_DAYS=30
 SECURE_COOKIES=false
 ALLOW_REGISTRATION=true
 ALL_USERS_ADMIN=false
+INVITE_ONLY=true
 EOF
 else
   printf '.env finns redan och lämnas orörd.\n'

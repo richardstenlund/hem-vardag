@@ -1036,6 +1036,10 @@
 		$('#auth-submit').textContent = registering ? 'Skapa konto' : 'Logga in';
 		$('#auth-switch').innerHTML = registering ? 'Har du redan ett konto? <button type="button">Logga in</button>' : 'Nytt konto? <button type="button">Skapa ett här</button>';
 		$('#auth-form input[name="password"]').autocomplete = registering ? 'new-password' : 'current-password';
+		$('#invite-field').hidden = !registering;
+		$('#auth-code-field').hidden = true;
+		$('#auth-code-field input').required = false;
+		$('#auth-code-field input').value = '';
 		$('#auth-error').textContent = '';
 	}
 
@@ -1096,10 +1100,17 @@
 		$('#auth-error').textContent = '';
 		try {
 			const guestData = readLocalData();
-			await api(authMode === 'register' ? '/auth/register' : '/auth/login', {
+			const authResult = await api(authMode === 'register' ? '/auth/register' : '/auth/login', {
 				method: 'POST',
-				body: JSON.stringify({ email: form.get('email'), password: form.get('password') })
+				body: JSON.stringify({ email: form.get('email'), password: form.get('password'), inviteToken: form.get('inviteToken'), code: form.get('code') })
 			});
+			if (authResult.requiresTwoFactor) {
+				$('#auth-code-field').hidden = false;
+				$('#auth-code-field input').required = true;
+				$('#auth-code-field input').focus();
+				$('#auth-error').textContent = 'Ange en kod från din autentiseringsapp eller en återställningskod.';
+				return;
+			}
 			const result = await api('/me');
 			currentUser = result.user;
 			accountReady = false;
@@ -1107,7 +1118,8 @@
 			$('#share-button').hidden = false;
 			await loadAccountData(guestData);
 			closeModal('auth-modal');
-			showToast('Listorna är nu kopplade till ditt konto.');
+			$('#auth-form').reset();
+			showToast(currentUser.requiresTwoFactorSetup ? 'Aktivera tvåstegsverifiering under Kontosäkerhet för att administrera konton.' : 'Listorna är nu kopplade till ditt konto.');
 		} catch (error) {
 			$('#auth-error').textContent = error.message;
 			showToast(error.message);
@@ -1142,6 +1154,7 @@
 	function updateAccountControls() {
 		$('#admin-link').hidden = currentUser?.role !== 'admin';
 		$('#password-button').hidden = !currentUser;
+		$('#security-link').hidden = !currentUser;
 	}
 
 	async function changePassword(event) {
@@ -1212,6 +1225,15 @@
 			if (!document.hidden) syncSharedHousehold();
 		});
 		render();
+		const invitation = new URLSearchParams(location.hash.slice(1));
+		if (invitation.has('invite')) {
+			authMode = 'register';
+			updateAuthMode();
+			$('#auth-form input[name="inviteToken"]').value = invitation.get('invite');
+			$('#auth-form input[name="email"]').value = invitation.get('email') || '';
+			history.replaceState(null, '', location.pathname + location.search);
+			$('#auth-modal').hidden = false;
+		}
 		if ('serviceWorker' in navigator && ['http:', 'https:'].includes(location.protocol)) {
 			navigator.serviceWorker.register('/sw.js').catch(error => showToast(`Offline-stöd kunde inte aktiveras: ${error.message}`));
 		}

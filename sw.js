@@ -1,4 +1,4 @@
-const cacheName = 'hem-vardag-v1';
+const cacheName = 'hem-vardag-v2';
 const appShell = ['/', '/vardag.html', '/vardag.css', '/vardag.js', '/manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(appShell)));

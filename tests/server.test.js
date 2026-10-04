@@ -2,9 +2,11 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { newDb } = require('pg-mem');
 const { createApp, initDatabase } = require('../server');
+const OTPAuth = require('otpauth');
 
 async function fixture(t, config = {}) {
-  config = { ALL_USERS_ADMIN: 'false', ...config };
+  config = { ALL_USERS_ADMIN: 'false', INVITE_ONLY: 'false', ...config };
+  const recovery = new Map();
   const db = newDb();
   const { Pool } = db.adapters.createPg();
   const pool = new Pool();
@@ -19,6 +21,9 @@ async function fixture(t, config = {}) {
     await pool.end();
   });
   async function request(path, { method = 'GET', body, cookie, origin } = {}) {
+    if (path === '/api/auth/login' && body && recovery.has(body.email) && !body.code) {
+      body = { ...body, code: recovery.get(body.email).shift() };
+    }
     const response = await fetch(`${base}${path}`, {
       method,
       headers: { ...(body ? { 'Content-Type': 'application/json' } : {}), ...(cookie ? { Cookie: cookie } : {}), ...(origin ? { Origin: origin } : {}) },
@@ -26,7 +31,17 @@ async function fixture(t, config = {}) {
     });
     const text = await response.text();
     const json = response.headers.get('content-type')?.includes('application/json') && text ? JSON.parse(text) : text;
-    return { status: response.status, json, cookie: response.headers.get('set-cookie')?.split(';')[0], response };
+    const result = { status: response.status, json, cookie: response.headers.get('set-cookie')?.split(';')[0], response };
+    if (['/api/auth/login', '/api/auth/register'].includes(path) && result.cookie && json.user?.requiresTwoFactorSetup) {
+      const setup = await request('/api/security/setup', { method: 'POST', cookie: result.cookie, body: { password: body.password } });
+      assert.equal(setup.status, 200);
+      const code = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(setup.json.secret) }).generate();
+      const enabled = await request('/api/security/enable', { method: 'POST', cookie: result.cookie, body: { code } });
+      assert.equal(enabled.status, 200);
+      recovery.set(json.user.email, enabled.json.recoveryCodes);
+      result.json = (await request('/api/me', { cookie: result.cookie })).json;
+    }
+    return result;
   }
   async function register(email) {
     const result = await request('/api/auth/register', { method: 'POST', body: { email, password: 'Testpassword123!' } });
@@ -128,7 +143,10 @@ test('only admins can change roles and the last admin is protected', async t => 
   assert.equal((await change(admin.json.user.id, 'user')).status, 409);
   const promoted = await change(person.json.user.id, 'admin');
   assert.equal(promoted.status, 200);
-  assert.deepEqual(promoted.json.user, { ...person.json.user, role: 'admin' });
+  assert.deepEqual(promoted.json.user, { id: person.json.user.id, email: person.json.user.email, role: 'admin' });
+  const setup = await request('/api/security/setup', { method: 'POST', cookie: person.cookie, body: { password: 'Testpassword123!' } });
+  const code = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(setup.json.secret) }).generate();
+  assert.equal((await request('/api/security/enable', { method: 'POST', cookie: person.cookie, body: { code } })).status, 200);
   assert.equal((await change(person.json.user.id, 'owner')).status, 400);
   assert.equal((await change('invalid', 'admin')).status, 400);
   assert.equal((await change(0, 'admin')).status, 400);
@@ -174,6 +192,9 @@ test('manual roles are the default and survive restart after all-admin mode is d
   const person = await register('manual@example.test');
   assert.equal(person.json.user.role, 'user');
   await pool.query("UPDATE users SET role = 'admin' WHERE id = $1", [person.json.user.id]);
+  const setup = await request('/api/security/setup', { method: 'POST', cookie: person.cookie, body: { password: 'Testpassword123!' } });
+  const code = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(setup.json.secret) }).generate();
+  assert.equal((await request('/api/security/enable', { method: 'POST', cookie: person.cookie, body: { code } })).status, 200);
   const existingSchema = { query: (sql, values) => sql.startsWith('CREATE TABLE IF NOT EXISTS')
     ? Promise.resolve({ rows: [] }) : pool.query(sql, values) };
   await initDatabase(existingSchema, {});
@@ -184,6 +205,9 @@ test('manual roles are the default and survive restart after all-admin mode is d
   assert.equal((await request(`/api/admin/users/${next.json.user.id}/role`, {
     method: 'POST', cookie: person.cookie, body: { role: 'admin' }
   })).status, 200);
+  const nextSetup = await request('/api/security/setup', { method: 'POST', cookie: next.cookie, body: { password: 'Testpassword123!' } });
+  const nextCode = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(nextSetup.json.secret) }).generate();
+  assert.equal((await request('/api/security/enable', { method: 'POST', cookie: next.cookie, body: { code: nextCode } })).status, 200);
   assert.equal((await request(`/api/admin/users/${person.json.user.id}/role`, {
     method: 'POST', cookie: next.cookie, body: { role: 'user' }
   })).status, 200);
@@ -209,6 +233,9 @@ test('account removal checks permissions and preserves the last and bootstrap ad
     body: { data: { notes: [{ id: 'private', title: 'Privat' }] }, version: current.json.version } });
   assert.equal((await remove(admin.json.user.id, admin.json.user.email)).status, 409);
   await request(`/api/admin/users/${person.json.user.id}/role`, { method: 'POST', cookie: admin.cookie, body: { role: 'admin' } });
+  const setup = await request('/api/security/setup', { method: 'POST', cookie: person.cookie, body: { password: 'Testpassword123!' } });
+  const code = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(setup.json.secret) }).generate();
+  assert.equal((await request('/api/security/enable', { method: 'POST', cookie: person.cookie, body: { code } })).status, 200);
   assert.equal((await remove(admin.json.user.id, admin.json.user.email)).status, 409);
   assert.equal((await remove(person.json.user.id, person.json.user.email, person.cookie)).status, 200);
   assert.equal((await request('/api/me', { cookie: person.cookie })).json.user, null);

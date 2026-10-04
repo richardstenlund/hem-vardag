@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kontosäkerhet | Hem &amp; vardag</title>
+  <link rel="stylesheet" href="vardag.css">
+  <script src="security.js" defer></script>
+</head>
+<body>
+  <main class="admin-main">
+    <a href="/">← Hem &amp; vardag</a>
+    <h1>Kontosäkerhet</h1>
+    <p id="security-status" role="status"></p>
+    <p id="security-error" role="alert"></p>
+    <div id="security-content" hidden>
+      <section class="section-card">
+        <h2>Tvåstegsverifiering</h2>
+        <p id="two-factor-description"></p>
+        <p>Installera Microsoft Authenticator, Google Authenticator eller en annan TOTP-app. Koderna fungerar utan e-postserver. Använd HTTPS när sidan nås utanför hemmet.</p>
+        <form id="setup-form" hidden>
+          <label class="form-field">Nuvarande lösenord<input name="password" type="password" required maxlength="256" autocomplete="current-password"></label>
+          <button class="primary-button" type="submit">Skapa autentiseringsnyckel</button>
+        </form>
+        <div id="setup-details" hidden>
+          <p>Skanna QR-koden i appen eller skriv in nyckeln manuellt. Bekräfta inom 10 minuter. Dela aldrig nyckeln.</p>
+          <img id="setup-qr" alt="QR-kod för din autentiseringsapp" width="220" height="220">
+          <label class="form-field">Hemlig nyckel<input id="setup-secret" readonly></label>
+          <form id="enable-form">
+            <label class="form-field">Sexsiffrig kod från appen<input name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code"></label>
+            <button class="primary-button" type="submit">Aktivera tvåstegsverifiering</button>
+          </form>
+        </div>
+        <form id="verify-form" hidden>
+          <p>Den här inloggningen behöver bekräftas innan du kan använda kontot.</p>
+          <label class="form-field">Appkod eller återställningskod<input name="code" required maxlength="80" autocomplete="one-time-code"></label>
+          <button class="primary-button" type="submit">Bekräfta inloggning</button>
+        </form>
+        <form id="factor-actions" hidden>
+          <p id="recovery-count"></p>
+          <label class="form-field">Nuvarande lösenord<input name="password" type="password" required maxlength="256" autocomplete="current-password"></label>
+          <label class="form-field">Appkod eller återställningskod<input name="code" required maxlength="80" autocomplete="one-time-code"></label>
+          <button class="secondary-button" type="submit" value="recovery-codes">Skapa nya återställningskoder</button>
+          <button class="secondary-button" type="submit" value="setup">Byt autentiseringsapp eller nyckel</button>
+          <button class="secondary-button" id="disable-factor" type="submit" value="disable">Stäng av tvåstegsverifiering</button>
+        </form>
+        <div id="recovery-result" hidden>
+          <h3>Spara dina återställningskoder nu</h3>
+          <p>Koderna visas bara nu och varje kod fungerar en gång. Förvara dem säkert, separat från telefonen. Nya koder ersätter alla gamla koder.</p>
+          <label class="form-field">Återställningskoder<textarea id="recovery-codes" rows="10" readonly></textarea></label>
+          <button class="secondary-button" id="download-codes" type="button">Ladda ned koder</button>
+          <button class="primary-button" id="acknowledge-codes" type="button">Jag har sparat koderna</button>
+        </div>
+      </section>
+      <section class="section-card" id="sessions-section" hidden>
+        <h2>Dina inloggningar</h2>
+        <p>Enhetsinformationen kommer från webbläsaren och kan vara ungefärlig. Avslutade inloggningar förlorar åtkomst direkt.</p>
+        <button class="secondary-button" id="revoke-others" type="button">Logga ut alla andra enheter</button>
+        <div id="session-list" class="item-grid"></div>
+      </section>
+      <a class="account-button" href="admin.html" id="security-admin-link" hidden>Administrera konton</a>
+    </div>
+  </main>
+</body>
+</html>

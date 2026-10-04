@@ -2,12 +2,16 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const express = require('express');
 const { Pool } = require('pg');
+const { initSecurity, mountSecurity, consumeFactor, audit, digest, passwordMatches } = require('./account-security');
 
 const validEmail = value => typeof value === 'string' && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value);
 const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) => ({
   salt, hash: crypto.scryptSync(password, salt, 64).toString('hex')
 });
-const publicUser = user => ({ id: user.id, email: user.email, role: user.role });
+const publicUser = user => ({
+  id: user.id, email: user.email, role: user.role,
+  twoFactorEnabled: Boolean(user.totp_secret), requiresTwoFactorSetup: user.role === 'admin' && !user.totp_secret
+});
 const dataLimit = 1024 * 1024;
 const allUsersAdmin = config => config.ALL_USERS_ADMIN === 'true';
 
@@ -37,6 +41,7 @@ async function initDatabase(pool, config = process.env) {
     role VARCHAR(10) NOT NULL CHECK (role IN ('owner', 'member')),
     PRIMARY KEY (household_id, user_id)
   )`);
+  await initSecurity(pool);
   const email = String(config.ADMIN_EMAIL || '').trim().toLowerCase();
   const password = String(config.ADMIN_PASSWORD || '');
   if (email || password) {
@@ -89,29 +94,37 @@ function createApp(pool, config = process.env) {
       .find(value => value.startsWith('hem_vardag_session='))?.slice('hem_vardag_session='.length);
     if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
     const { rows } = await pool.query(
-      `SELECT users.*, sessions.id AS session_id FROM sessions JOIN users ON users.id = sessions.user_id
-       WHERE sessions.id = $1 AND sessions.expires_at > $2`, [token, Date.now()]);
+      `SELECT users.*, sessions.id AS session_id, sessions.mfa_verified, s.totp_secret
+       FROM sessions JOIN users ON users.id = sessions.user_id LEFT JOIN user_security s ON s.user_id = users.id
+       WHERE sessions.id = $1 AND sessions.expires_at > $2 AND users.active = true`, [token, Date.now()]);
     return rows[0] || null;
   }
   async function requireUser(req, res, next) {
     try {
       req.user = await sessionUser(req);
       if (!req.user) return res.status(401).json({ error: 'Du måste vara inloggad.' });
+      if (req.user.totp_secret && !req.user.mfa_verified
+        && !['/api/security', '/api/security/verify', '/api/auth/logout'].includes(req.path)) {
+        return res.status(403).json({ error: 'Bekräfta tvåstegsverifieringen under Kontosäkerhet.' });
+      }
       next();
     } catch (error) { next(error); }
   }
   const authenticated = handler => [requireUser, asyncRoute(handler)];
   const admin = handler => authenticated(async (req, res) => {
     if (req.user.role !== 'admin') return res.status(403).json({ error: 'Administratörsbehörighet krävs.' });
+    if (!req.user.totp_secret || !req.user.mfa_verified) {
+      return res.status(403).json({ error: 'Aktivera tvåstegsverifiering under Kontosäkerhet innan du administrerar konton.' });
+    }
     await handler(req, res);
   });
   function cookie(res, value, age) {
     res.setHeader('Set-Cookie', `hem_vardag_session=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${age}${secure ? '; Secure' : ''}`);
   }
-  async function createSession(id, res) {
+  async function createSession(id, res, req, verified = false, client = pool) {
     const token = crypto.randomBytes(32).toString('hex');
-    await pool.query('INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)',
-      [token, id, Date.now() + sessionsDays * 86400000]);
+    await client.query('INSERT INTO sessions (id, user_id, expires_at, device, mfa_verified) VALUES ($1, $2, $3, $4, $5)',
+      [token, id, Date.now() + sessionsDays * 86400000, String(req.get('user-agent') || 'Okänd enhet').slice(0, 200), verified]);
     cookie(res, token, sessionsDays * 86400);
   }
   async function readHousehold(userId) {
@@ -145,10 +158,12 @@ function createApp(pool, config = process.env) {
   async function adminTransaction(req, action) {
     return transaction(async client => {
       // Serialize account removal and role changes, including concurrent admin requests.
-      const { rows: users } = await client.query('SELECT id, email, role FROM users ORDER BY id FOR UPDATE');
-      if (users.find(user => user.id === req.user.id)?.role !== 'admin') {
+      const { rows: users } = await client.query('SELECT id, email, role, active FROM users ORDER BY id FOR UPDATE');
+      if (!users.some(user => user.id === req.user.id && user.role === 'admin' && user.active)) {
         return { status: 403, error: 'Administratörsbehörighet krävs.' };
       }
+      const { rows: [session] } = await client.query('SELECT mfa_verified FROM sessions WHERE id = $1', [req.user.session_id]);
+      if (!session?.mfa_verified) return { status: 403, error: 'Inloggningen är inte längre giltig. Logga in igen.' };
       return action(client, users);
     });
   }
@@ -172,7 +187,7 @@ function createApp(pool, config = process.env) {
     next();
   });
   app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'vardag.html')));
-  const publicFiles = new Set(['vardag.html', 'vardag.css', 'vardag.js', 'admin.html', 'admin.js', 'sw.js', 'manifest.webmanifest']);
+  const publicFiles = new Set(['vardag.html', 'vardag.css', 'vardag.js', 'admin.html', 'admin.js', 'security.html', 'security.js', 'sw.js', 'manifest.webmanifest']);
   app.get('/:file', (req, res, next) => {
     if (!publicFiles.has(req.params.file)) return next();
     res.sendFile(path.join(__dirname, req.params.file));
@@ -192,26 +207,58 @@ function createApp(pool, config = process.env) {
     const password = String(req.body?.password || '');
     if (!validEmail(email) || password.length < 8 || password.length > 256) return res.status(400).json({ error: 'Ange giltig e-post och ett lösenord med 8–256 tecken.' });
     const { salt, hash } = hashPassword(password);
-    const { rows: [user] } = await pool.query(
-      `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, $4)
-       ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt, allUsersAdmin(config) ? 'admin' : 'user']);
-    if (!user) return res.status(409).json({ error: 'Det finns redan ett konto med den e-posten.' });
-    await createSession(user.id, res);
-    res.status(201).json({ user: publicUser(user) });
+    const result = await transaction(async client => {
+      await client.query('SELECT id FROM users ORDER BY id FOR UPDATE');
+      const token = req.body?.inviteToken;
+      let invite;
+      if (config.INVITE_ONLY !== 'false' || token) {
+        if (typeof token !== 'string' || !/^[a-f0-9]{48}$/.test(token)) return { status: 403, error: 'Du behöver en giltig kontoinbjudan från en administratör.' };
+        const { rows: [found] } = await client.query('SELECT * FROM registration_invites WHERE token_hash = $1 FOR UPDATE', [digest(token)]);
+        if (!found || found.email !== email || found.revoked || found.used_at || Number(found.expires_at) <= Date.now()) {
+          return { status: 403, error: 'Inbjudan stämmer inte med e-posten, har gått ut eller har redan använts.' };
+        }
+        invite = found;
+      }
+      const { rows: [user] } = await client.query(
+        `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt, allUsersAdmin(config) ? 'admin' : 'user']);
+      if (!user) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
+      if (invite) {
+        await client.query('UPDATE registration_invites SET used_at = NOW() WHERE id = $1', [invite.id]);
+        await audit(client, email, email, 'invitation_used');
+      }
+      await createSession(user.id, res, req, false, client);
+      return { status: 201, user };
+    });
+    res.status(result.status).json(result.error ? { error: result.error } : { user: publicUser(result.user) });
   }));
   app.post('/api/auth/login', asyncRoute(async (req, res) => {
     if (limit(`login:${req.ip}`, 8, 15 * 60000)) return res.status(429).json({ error: 'För många försök. Vänta 15 minuter.' });
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     if (password.length > 256) return res.status(400).json({ error: 'Lösenordet är för långt.' });
-    const { rows: [user] } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    const salt = user?.password_salt || '0'.repeat(32);
-    const actual = Buffer.from(hashPassword(password, salt).hash, 'hex');
-    const expected = Buffer.from(user?.password_hash || '0'.repeat(128), 'hex');
-    if (!user || !crypto.timingSafeEqual(actual, expected)) return res.status(401).json({ error: 'E-posten eller lösenordet stämmer inte.' });
-    attempts.delete(`login:${req.ip}`);
-    await createSession(user.id, res);
-    res.json({ user: publicUser(user) });
+    if (limit(`login-email:${email}`, 15, 15 * 60000)) return res.status(429).json({ error: 'För många försök för kontot. Vänta 15 minuter.' });
+    const result = await transaction(async client => {
+      const { rows: [user] } = await client.query('SELECT * FROM users WHERE email = $1 FOR UPDATE', [email]);
+      const checkUser = user || { password_salt: '0'.repeat(32), password_hash: '0'.repeat(128) };
+      if (!passwordMatches(password, checkUser, hashPassword) || !user?.active) {
+        return { status: 401, error: 'Inloggningen misslyckades. Kontrollera uppgifterna eller kontakta administratören.' };
+      }
+      const { rows: [security] } = await client.query('SELECT totp_secret FROM user_security WHERE user_id = $1', [user.id]);
+      user.totp_secret = security?.totp_secret;
+      if (user.totp_secret) {
+        if (!req.body?.code) return { status: 200, requiresTwoFactor: true };
+        if (!await consumeFactor(client, user.id, req.body.code)) return { status: 401, error: 'Koden stämmer inte eller har redan använts.' };
+      }
+      await createSession(user.id, res, req, Boolean(user.totp_secret), client);
+      return { status: 200, user };
+    });
+    if (result.user) {
+      attempts.delete(`login:${req.ip}`);
+      attempts.delete(`login-email:${email}`);
+    }
+    res.status(result.status).json(result.error ? { error: result.error }
+      : result.requiresTwoFactor ? { requiresTwoFactor: true } : { user: publicUser(result.user) });
   }));
   app.post('/api/auth/logout', ...authenticated(async (req, res) => {
     await pool.query('DELETE FROM sessions WHERE id = $1', [req.user.session_id]);
@@ -296,16 +343,18 @@ function createApp(pool, config = process.env) {
     }));
   }
   app.get('/api/admin/users', ...admin(async (req, res) => {
-    const { rows } = await pool.query('SELECT id, email, role, created_at FROM users ORDER BY id');
+    const { rows } = await pool.query('SELECT id, email, role, active, created_at FROM users ORDER BY id');
+    const { rows: security } = await pool.query('SELECT user_id, totp_secret FROM user_security');
     const { rows: spaces } = await pool.query('SELECT id, name, owner_id FROM household_spaces ORDER BY id');
     const { rows: members } = await pool.query(
       'SELECT m.household_id, u.id, u.email FROM household_members m JOIN users u ON u.id = m.user_id ORDER BY u.id');
     const bootstrapEmail = String(config.ADMIN_EMAIL || '').trim().toLowerCase();
     const users = rows.map(user => {
       const space = spaces.find(item => item.owner_id === user.id);
-      const lastAdmin = user.role === 'admin' && rows.filter(item => item.role === 'admin').length === 1;
+      const lastAdmin = user.active && user.role === 'admin' && rows.filter(item => item.role === 'admin' && item.active).length === 1;
       return {
         ...user,
+        twoFactorEnabled: Boolean(security.find(item => item.user_id === user.id)?.totp_secret),
         deletionBlockedReason: lastAdmin ? 'Den sista administratören kan inte tas bort.'
           : user.email === bootstrapEmail ? 'Ändra ADMIN_EMAIL i serverns inställningar först, annars återskapas kontot vid omstart.'
           : space ? 'Överför hushållets ägarskap innan kontot tas bort.' : '',
@@ -330,10 +379,11 @@ function createApp(pool, config = process.env) {
     const result = await adminTransaction(req, async (client, users) => {
       const target = users.find(user => user.id === id);
       if (!target) return { status: 404, error: 'Kontot hittades inte.' };
-      if (target.role === 'admin' && role === 'user' && users.filter(user => user.role === 'admin').length === 1) {
+      if (target.active && target.role === 'admin' && role === 'user' && users.filter(user => user.role === 'admin' && user.active).length === 1) {
         return { status: 409, error: 'Den sista administratören kan inte göras till vanlig användare. Utse en annan administratör först.' };
       }
       const { rows: [user] } = await client.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, email, role', [role, id]);
+      await audit(client, req.user.email, target.email, 'role_changed', role);
       return { status: 200, user };
     });
     res.status(result.status).json(result.error ? { error: result.error } : { user: result.user });
@@ -354,6 +404,7 @@ function createApp(pool, config = process.env) {
       await client.query('UPDATE household_spaces SET owner_id = $1 WHERE id = $2', [newOwnerId, space.id]);
       await client.query("UPDATE household_members SET role = 'member' WHERE household_id = $1 AND user_id = $2", [space.id, id]);
       await client.query("UPDATE household_members SET role = 'owner' WHERE household_id = $1 AND user_id = $2", [space.id, newOwnerId]);
+      await audit(client, req.user.email, users.find(user => user.id === id).email, 'household_owner_changed', users.find(user => user.id === newOwnerId).email);
       return { status: 200 };
     });
     res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
@@ -365,7 +416,7 @@ function createApp(pool, config = process.env) {
       const target = users.find(user => user.id === id);
       if (!target) return { status: 404, error: 'Kontot hittades inte.' };
       if (req.body?.email !== target.email) return { status: 400, error: 'Bekräfta kontots e-postadress för att ta bort det.' };
-      if (target.role === 'admin' && users.filter(user => user.role === 'admin').length === 1) {
+      if (target.active && target.role === 'admin' && users.filter(user => user.role === 'admin' && user.active).length === 1) {
         return { status: 409, error: 'Den sista administratören kan inte tas bort.' };
       }
       if (target.email === String(config.ADMIN_EMAIL || '').trim().toLowerCase()) {
@@ -374,6 +425,7 @@ function createApp(pool, config = process.env) {
       const { rows: [space] } = await client.query('SELECT id FROM household_spaces WHERE owner_id = $1 FOR UPDATE', [id]);
       if (space) return { status: 409, error: 'Överför hushållets ägarskap till en annan medlem innan kontot tas bort.' };
       await client.query('DELETE FROM users WHERE id = $1', [id]);
+      await audit(client, req.user.email, target.email, 'account_deleted');
       return { status: 200 };
     });
     if (!result.error && id === req.user.id) cookie(res, '', 0);
@@ -384,14 +436,20 @@ function createApp(pool, config = process.env) {
     const password = String(req.body?.newPassword || '');
     if (!Number.isSafeInteger(id) || password.length < 8 || password.length > 256) return res.status(400).json({ error: 'Ange giltigt konto och lösenord (8–256 tecken).' });
     const { salt, hash } = hashPassword(password);
-    const found = await transaction(async client => {
-      const result = await client.query('UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3', [hash, salt, id]);
+    const result = await adminTransaction(req, async (client, users) => {
+      const target = users.find(user => user.id === id);
+      if (!target) return { status: 404, error: 'Kontot hittades inte.' };
+      await client.query('UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3', [hash, salt, id]);
       await client.query('DELETE FROM sessions WHERE user_id = $1', [id]);
-      return result.rowCount;
+      await audit(client, req.user.email, target.email, 'password_reset');
+      return { status: 200 };
     });
-    if (!found) return res.status(404).json({ error: 'Kontot hittades inte.' });
-    res.json({ ok: true });
+    res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
   }));
+  mountSecurity(app, {
+    pool, config, authenticated, admin, asyncRoute, transaction, adminTransaction, limit, cookie, validEmail,
+    passwordCheck: (password, user) => passwordMatches(password, user, hashPassword)
+  });
   app.use('/api', (req, res) => res.status(404).json({ error: 'API-adressen finns inte.' }));
   app.use((req, res) => res.status(404).send('Sidan finns inte.'));
   app.use((error, req, res, next) => {
