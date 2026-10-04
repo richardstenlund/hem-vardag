@@ -9,6 +9,7 @@ const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) =
 });
 const publicUser = user => ({ id: user.id, email: user.email, role: user.role });
 const dataLimit = 1024 * 1024;
+const allUsersAdmin = config => config.ALL_USERS_ADMIN !== 'false';
 
 async function initDatabase(pool, config = process.env) {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -47,6 +48,7 @@ async function initDatabase(pool, config = process.env) {
       `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, 'admin')
        ON CONFLICT (email) DO NOTHING`, [email, hash, salt]);
   }
+  if (allUsersAdmin(config)) await pool.query("UPDATE users SET role = 'admin' WHERE role <> 'admin'");
 }
 
 function mergeHouseholdData(primary, secondary) {
@@ -181,8 +183,8 @@ function createApp(pool, config = process.env) {
     if (!validEmail(email) || password.length < 8 || password.length > 256) return res.status(400).json({ error: 'Ange giltig e-post och ett lösenord med 8–256 tecken.' });
     const { salt, hash } = hashPassword(password);
     const { rows: [user] } = await pool.query(
-      `INSERT INTO users (email, password_hash, password_salt) VALUES ($1, $2, $3)
-       ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt]);
+      `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt, allUsersAdmin(config) ? 'admin' : 'user']);
     if (!user) return res.status(409).json({ error: 'Det finns redan ett konto med den e-posten.' });
     await createSession(user.id, res);
     res.status(201).json({ user: publicUser(user) });
@@ -285,7 +287,32 @@ function createApp(pool, config = process.env) {
   }
   app.get('/api/admin/users', ...admin(async (req, res) => {
     const { rows } = await pool.query('SELECT id, email, role, created_at FROM users ORDER BY id');
-    res.json({ users: rows });
+    res.json({ users: rows, allUsersAdmin: allUsersAdmin(config) });
+  }));
+  app.post('/api/admin/users/:id/role', ...admin(async (req, res) => {
+    const id = Number(req.params.id);
+    const role = req.body?.role;
+    if (!Number.isSafeInteger(id) || id < 1 || !['admin', 'user'].includes(role)) {
+      return res.status(400).json({ error: 'Ange giltigt konto och rollen admin eller user.' });
+    }
+    if (allUsersAdmin(config) && role === 'user') {
+      return res.status(409).json({ error: 'Alla konton ska vara administratörer. Stäng av ALL_USERS_ADMIN innan du ändrar till vanlig användare.' });
+    }
+    const result = await transaction(async client => {
+      // Lock in a stable order so simultaneous demotions cannot remove every admin.
+      const { rows: users } = await client.query('SELECT id, role FROM users ORDER BY id FOR UPDATE');
+      if (users.find(user => user.id === req.user.id)?.role !== 'admin') {
+        return { status: 403, error: 'Administratörsbehörighet krävs.' };
+      }
+      const target = users.find(user => user.id === id);
+      if (!target) return { status: 404, error: 'Kontot hittades inte.' };
+      if (target.role === 'admin' && role === 'user' && users.filter(user => user.role === 'admin').length === 1) {
+        return { status: 409, error: 'Den sista administratören kan inte göras till vanlig användare. Utse en annan administratör först.' };
+      }
+      const { rows: [user] } = await client.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, email, role', [role, id]);
+      return { status: 200, user };
+    });
+    res.status(result.status).json(result.error ? { error: result.error } : { user: result.user });
   }));
   app.post('/api/admin/users/:id/password', ...admin(async (req, res) => {
     const id = Number(req.params.id);

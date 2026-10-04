@@ -103,6 +103,8 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 4. Andra personer väljer **Skapa ett här** i inloggningsrutan och registrerar sitt eget konto.
 5. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 6. Administratören kan öppna **Administrera konton** och återställa glömda lösenord. Inga hushållslistor visas i adminpanelen.
+7. **Alla konton är administratörer som standard.** Befintliga konton får rollen vid serverstart och nya konton får den direkt. Alla kan återställa andra kontons lösenord. Använd endast detta läge med personer du litar på: med öppen registrering kan vem som helst som når sidan skapa ett administratörskonto och ta över andra konton.
+8. För manuella roller: sätt `ALL_USERS_ADMIN=false` i `.env` och starta om med `docker compose up -d`. Befintliga administratörer behåller rollen, men nya konton blir vanliga användare. I kontohanteringen kan du sedan välja **Gör till administratör** eller **Gör till användare** och bekräfta. Minst en administratör måste finnas kvar. Roller gäller direkt, även för redan inloggade konton.
 
 | Logga in eller skapa konto | Anpassad djurprofil |
 |---|---|
@@ -120,6 +122,7 @@ Admin-kontot skapas vid start om e-postadressen inte finns. En omstart ändrar *
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Egna databasuppgifter. Byt inte efter installation utan databasadministration |
 | `SECURE_COOKIES` | `false` för HTTP hemma, `true` bakom HTTPS |
 | `ALLOW_REGISTRATION` | `true` låter användare skapa konton; `false` stänger registreringen |
+| `ALL_USERS_ADMIN` | Standard `true`: alla befintliga och framtida konton blir administratörer. `false` aktiverar manuella roller utan att återställa befintliga roller |
 | `SESSION_DAYS` | Hur länge inloggningen gäller; standard 30 dagar |
 
 Efter ändring: `docker compose up -d`. Lägg aldrig `.env` eller databasbackuper på GitHub.

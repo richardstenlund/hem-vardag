@@ -51,6 +51,7 @@ APP_URL=${APP_URL_VALUE}
 SESSION_DAYS=30
 SECURE_COOKIES=false
 ALLOW_REGISTRATION=true
+ALL_USERS_ADMIN=true
 EOF
 else
   printf '.env finns redan och lämnas orörd.\n'

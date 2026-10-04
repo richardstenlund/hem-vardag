@@ -4,6 +4,7 @@ const { newDb } = require('pg-mem');
 const { createApp, initDatabase } = require('../server');
 
 async function fixture(t, config = {}) {
+  config = { ALL_USERS_ADMIN: 'false', ...config };
   const db = newDb();
   const { Pool } = db.adapters.createPg();
   const pool = new Pool();
@@ -114,6 +115,58 @@ test('admin bootstrap is usable and does not reset password on restart', async t
     ? Promise.resolve({ rows: [] }) : pool.query(sql, values) };
   await initDatabase(existingSchema, config);
   assert.equal((await request('/api/auth/login', { method: 'POST', body: { email: config.ADMIN_EMAIL, password: 'Changedadmin123!' } })).status, 200);
+});
+
+test('only admins can change roles and the last admin is protected', async t => {
+  const { request, register } = await fixture(t, { ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: 'Adminpassword123!' });
+  const admin = await request('/api/auth/login', { method: 'POST', body: { email: 'admin@example.test', password: 'Adminpassword123!' } });
+  const person = await register('person@example.test');
+  const rolePath = id => `/api/admin/users/${id}/role`;
+  const change = (id, role, cookie = admin.cookie) => request(rolePath(id), { method: 'POST', cookie, body: { role } });
+  assert.equal((await change(person.json.user.id, 'admin', person.cookie)).status, 403);
+  assert.equal((await request(rolePath(person.json.user.id), { method: 'POST', body: { role: 'admin' } })).status, 401);
+  assert.equal((await change(admin.json.user.id, 'user')).status, 409);
+  const promoted = await change(person.json.user.id, 'admin');
+  assert.equal(promoted.status, 200);
+  assert.deepEqual(promoted.json.user, { ...person.json.user, role: 'admin' });
+  assert.equal((await change(person.json.user.id, 'owner')).status, 400);
+  assert.equal((await change('invalid', 'admin')).status, 400);
+  assert.equal((await change(0, 'admin')).status, 400);
+  assert.equal((await change(9999, 'admin')).status, 404);
+  assert.equal((await request('/api/me', { cookie: person.cookie })).json.user.role, 'admin');
+  assert.equal((await request('/api/admin/users', { cookie: person.cookie })).status, 200);
+  assert.equal((await change(admin.json.user.id, 'user', person.cookie)).status, 200);
+  assert.equal((await request('/api/admin/users', { cookie: admin.cookie })).status, 403);
+  assert.equal((await change(person.json.user.id, 'user', admin.cookie)).status, 403);
+  assert.equal((await change(person.json.user.id, 'user', person.cookie)).status, 409);
+  assert.equal((await change(admin.json.user.id, 'admin', person.cookie)).status, 200);
+  assert.equal((await change(person.json.user.id, 'user', person.cookie)).status, 200);
+  assert.equal((await request('/api/me', { cookie: person.cookie })).json.user.role, 'user');
+  assert.equal((await request('/api/admin/users', { cookie: person.cookie })).status, 403);
+  assert.equal((await change(admin.json.user.id, 'user')).status, 409);
+  assert.equal((await change(admin.json.user.id, 'admin')).status, 200);
+});
+
+test('all-admin default promotes existing users and grants new accounts admin access', async t => {
+  const { pool, request, register } = await fixture(t, { ALL_USERS_ADMIN: undefined });
+  const account = await register('everyone@example.test');
+  assert.equal(account.json.user.role, 'admin');
+  const list = await request('/api/admin/users', { cookie: account.cookie });
+  assert.equal(list.status, 200);
+  assert.equal(list.json.allUsersAdmin, true);
+  assert.equal((await request(`/api/admin/users/${account.json.user.id}/role`, {
+    method: 'POST', cookie: account.cookie, body: { role: 'user' }
+  })).status, 409);
+  await pool.query("UPDATE users SET role = 'user' WHERE id = $1", [account.json.user.id]);
+  const existingSchema = { query: (sql, values) => sql.startsWith('CREATE TABLE IF NOT EXISTS')
+    ? Promise.resolve({ rows: [] }) : pool.query(sql, values) };
+  await initDatabase(existingSchema, {});
+  assert.equal((await request('/api/me', { cookie: account.cookie })).json.user.role, 'admin');
+  const next = await register('next@example.test');
+  assert.equal(next.json.user.role, 'admin');
+  assert.equal((await request(`/api/admin/users/${next.json.user.id}/password`, {
+    method: 'POST', cookie: account.cookie, body: { newPassword: 'Resetpassword123!' }
+  })).status, 200);
 });
 
 test('invalid input, external origins, registration toggle and payload limits', async t => {

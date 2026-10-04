@@ -11,8 +11,10 @@
   <main class="admin-main">
     <a href="/">← Hem &amp; vardag</a>
     <h1>Administrera konton</h1>
-    <p>Varje användare skapar sitt eget konto via startsidan. Här kan du återställa ett glömt lösenord. Kontonas listor visas inte för administratören.</p>
+    <p>Varje användare skapar sitt eget konto via startsidan. Här kan du återställa ett glömt lösenord och göra användare till administratörer eller vanliga användare. Administratörer kan hantera alla konton, men kontonas listor visas inte här. Minst en administratör måste finnas kvar.</p>
     <p id="admin-status" role="status"></p>
+    <p id="admin-mode" hidden>Alla befintliga och nya konton är administratörer. Alla kan ändra andra kontons lösenord. Rolländringar till vanlig användare är avstängda i detta läge.</p>
+    <p id="admin-role-status" role="status"></p>
     <div id="admin-users" class="item-grid"></div>
     <form id="admin-password-form" class="section-card" hidden>
       <h2>Återställ lösenord</h2>
