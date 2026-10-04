@@ -166,6 +166,14 @@ function createApp(pool, config = process.env) {
       return action(client, users);
     });
   }
+  async function insertAccount(client, users, email, password) {
+    if (users.some(user => user.email === email)) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
+    const { salt, hash } = hashPassword(password);
+    const { rows: [user] } = await client.query(
+      `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, 'admin')
+       ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt]);
+    return user ? { status: 201, user } : { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
+  }
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -209,16 +217,11 @@ function createApp(pool, config = process.env) {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     if (!validEmail(email) || password.length < 8 || password.length > 256) return res.status(400).json({ error: 'Ange giltig e-post och ett lösenord med 8–256 tecken.' });
-    const { salt, hash } = hashPassword(password);
     const result = await transaction(async client => {
       const { rows: users } = await client.query('SELECT id, email FROM users ORDER BY id FOR UPDATE');
-      if (users.some(user => user.email === email)) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
-      const { rows: [user] } = await client.query(
-        `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt, 'admin']);
-      if (!user) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
-      await createSession(user.id, res, req, false, client);
-      return { status: 201, user };
+      const result = await insertAccount(client, users, email, password);
+      if (result.user) await createSession(result.user.id, res, req, false, client);
+      return result;
     });
     res.status(result.status).json(result.error ? { error: result.error } : { user: publicUser(result.user) });
   }));
@@ -356,6 +359,19 @@ function createApp(pool, config = process.env) {
       };
     });
     res.json({ users, allUsersAdmin: true });
+  }));
+  app.post('/api/admin/users', ...admin(async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    if (!validEmail(email) || password.length < 8 || password.length > 256) {
+      return res.status(400).json({ error: 'Ange giltig e-post och ett lösenord med 8–256 tecken.' });
+    }
+    const result = await adminTransaction(req, async (client, users) => {
+      const result = await insertAccount(client, users, email, password);
+      if (result.user) await audit(client, req.user.email, result.user.email, 'account_created');
+      return result;
+    });
+    res.status(result.status).json(result.error ? { error: result.error } : { user: publicUser(result.user) });
   }));
   app.post('/api/admin/users/:id/role', ...admin(async (req, res) => {
     res.status(409).json({ error: 'Alla konton är administratörer. Rolländringar finns inte i den förenklade kontohanteringen.' });

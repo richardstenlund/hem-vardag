@@ -43,6 +43,7 @@ test('admin audit initializes independently of the password form without invitat
   assert.equal(nodes.get('#admin-status').textContent, '0 konton');
   assert.equal(nodes.has('#admin-invitations'), false);
   assert.equal(nodes.get('#admin-audit').hidden, false);
+  assert.equal(nodes.get('#admin-create-form').hidden, false);
   assert.equal(nodes.has('#invite-form'), false);
 });
 

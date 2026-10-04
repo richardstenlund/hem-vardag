@@ -105,7 +105,7 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 2. Tryck **Logga in** och använd admin-uppgifterna från `.env` eller installationsskriptet.
 3. Välj **Byt lösenord** i menyn och sätt ett eget lösenord. På mobil finns länken i toppfältet.
 4. Du kan använda sidan och **Administrera konton** direkt efter inloggning. **Kontosäkerhet** innehåller valfri tvåstegsverifiering och dina inloggningar.
-5. Andra personer trycker **Skapa konto** direkt i toppfältet, fyller i e-post och lösenord (minst 8 tecken) och trycker **Skapa konto**. De loggas in direkt. Ingen kontoinbjudan behövs.
+5. Alla inloggade kan välja **Administrera konton → Skapa användare**, ange e-post och lösenord (8–256 tecken) och skapa ett nytt administratörskonto. Den som skapar kontot förblir inloggad på sitt eget konto. Lämna uppgifterna säkert till den nya användaren; ingen inbjudan eller e-post skickas. Detta fungerar även när offentlig registrering är avstängd. Andra personer kan också trycka **Skapa konto** i toppfältet när registrering är öppen och loggas då in direkt.
 6. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 7. Administratören kan återställa glömda lösenord. Inga hushållslistor visas i adminpanelen. Lösenordsåterställning stänger kontots inloggningar men tar inte bort tvåstegsverifieringen.
 8. **Alla konton är administratörer.** Befintliga konton får rollen vid serverstart och nya konton får den direkt. Det finns inga rollknappar eller krav på tvåstegsverifiering. Minst ett aktivt konto måste finnas kvar.

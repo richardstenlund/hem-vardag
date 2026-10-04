@@ -76,6 +76,57 @@ test('register, login, logout, change password and account isolation', async t =
   assert.equal((await request('/api/auth/login', { method: 'POST', body: { email: 'alice@example.test', password: 'Newpassword123!' } })).status, 200);
 });
 
+test('every user can create admins and delete accounts without replacing their own session', async t => {
+  const { request, register, pool } = await fixture(t);
+  const alice = await register('alice@example.test');
+  const create = (cookie, email, password = 'Createdpassword123!') => request('/api/admin/users', {
+    method: 'POST', cookie, body: { email, password }
+  });
+  assert.equal((await create(undefined, 'blocked@example.test')).status, 401);
+  assert.equal((await create(alice.cookie, 'invalid')).status, 400);
+  assert.equal((await create(alice.cookie, 'short@example.test', 'short')).status, 400);
+  assert.equal((await create(alice.cookie, 'long@example.test', 'x'.repeat(257))).status, 400);
+  const bob = await create(alice.cookie, ' BOB@example.test ');
+  assert.equal(bob.status, 201);
+  assert.equal(bob.json.user.role, 'admin');
+  assert.equal(bob.json.user.email, 'bob@example.test');
+  assert.equal(bob.cookie, undefined);
+  assert.equal((await request('/api/me', { cookie: alice.cookie })).json.user.id, alice.json.user.id);
+  assert.equal((await create(alice.cookie, 'bob@example.test')).status, 409);
+  const login = await request('/api/auth/login', {
+    method: 'POST', body: { email: 'bob@example.test', password: 'Createdpassword123!' }
+  });
+  assert.equal(login.status, 200);
+  assert.equal((await request('/api/admin/users', { cookie: login.cookie })).status, 200);
+  const carol = await create(login.cookie, 'carol@example.test');
+  assert.equal(carol.status, 201);
+  assert.equal((await request(`/api/admin/users/${carol.json.user.id}`, {
+    method: 'DELETE', cookie: login.cookie, body: { email: 'carol@example.test' }
+  })).status, 200);
+  const { rows } = await pool.query("SELECT * FROM admin_audit WHERE action = 'account_created'");
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].actor_email, 'alice@example.test');
+  assert.equal(rows[0].target_email, 'bob@example.test');
+  assert.ok(!JSON.stringify(rows).includes('Createdpassword123!'));
+});
+
+test('admin account creation stays available with public registration closed', async t => {
+  const { request } = await fixture(t, {
+    ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: 'Adminpassword123!', ALLOW_REGISTRATION: 'false'
+  });
+  const login = await request('/api/auth/login', {
+    method: 'POST', body: { email: 'admin@example.test', password: 'Adminpassword123!' }
+  });
+  assert.equal((await request('/api/auth/register', {
+    method: 'POST', body: { email: 'closed@example.test', password: 'Testpassword123!' }
+  })).status, 403);
+  const created = await request('/api/admin/users', {
+    method: 'POST', cookie: login.cookie, body: { email: 'added@example.test', password: 'Testpassword123!' }
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.json.user.role, 'admin');
+});
+
 test('household creation, join, merging and stale-write protection', async t => {
   const { request, register } = await fixture(t);
   const alice = await register('alice@example.test');

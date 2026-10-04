@@ -4,7 +4,7 @@
   let nextBefore = null;
   const actionNames = {
     role_changed: 'Ändrade roll', password_reset: 'Återställde lösenord',
-    account_deleted: 'Tog bort konto', account_enabled: 'Aktiverade konto', account_disabled: 'Inaktiverade konto',
+    account_created: 'Skapade konto', account_deleted: 'Tog bort konto', account_enabled: 'Aktiverade konto', account_disabled: 'Inaktiverade konto',
     household_owner_changed: 'Överförde hushållsägarskap',
     two_factor_enabled: 'Aktiverade tvåstegsverifiering', two_factor_disabled: 'Stängde av tvåstegsverifiering',
     two_factor_changed: 'Bytte autentiseringsnyckel',
@@ -20,6 +20,7 @@
     document.querySelector('#admin-users').replaceChildren();
     document.querySelector('#user-select').replaceChildren();
     document.querySelector('#admin-password-form').hidden = true;
+    document.querySelector('#admin-create-form').hidden = true;
     document.querySelector('#admin-mode').hidden = true;
     document.querySelector('#admin-audit').hidden = true;
     try {
@@ -132,9 +133,28 @@
       }
       status.textContent = `${users.length} konton`;
       document.querySelector('#admin-password-form').hidden = false;
+      document.querySelector('#admin-create-form').hidden = false;
       await loadAudit();
     } catch (error) { status.textContent = error.message; }
   }
+  document.querySelector('#admin-create-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const button = form.querySelector('button');
+    const feedback = document.querySelector('#admin-create-error');
+    button.disabled = true;
+    feedback.textContent = '';
+    try {
+      const { user } = await api('/admin/users', {
+        method: 'POST', body: JSON.stringify({ email: values.get('email'), password: values.get('password') })
+      });
+      form.reset();
+      feedback.textContent = `${user.email} har skapats som administratör. Du är fortfarande inloggad på ditt eget konto.`;
+      await load();
+    } catch (error) { feedback.textContent = error.message; }
+    finally { button.disabled = false; }
+  });
   document.querySelector('#admin-password-form').addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;

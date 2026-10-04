@@ -12,10 +12,18 @@
     <a href="/">← Hem &amp; vardag</a>
     <a href="security.html">Kontosäkerhet</a>
     <h1>Administrera konton</h1>
-    <p>Här kan alla inloggade användare återställa lösenord, inaktivera och ta bort konton. Minst ett aktivt konto måste finnas kvar. Om kontot äger ett delat hushåll måste ägarskapet först överföras. Kontonas listor visas inte här.</p>
+    <p>Här kan alla inloggade användare skapa konton, återställa lösenord, inaktivera och ta bort konton. Alla får administratörsbehörighet. Minst ett aktivt konto måste finnas kvar. Om kontot äger ett delat hushåll måste ägarskapet först överföras. Kontonas listor visas inte här.</p>
     <p id="admin-status" role="status"></p>
     <p id="admin-mode" hidden>Alla konton är administratörer. Registrering kräver bara e-post och lösenord, utan inbjudan eller krav på tvåstegsverifiering. Använd endast sidan med personer du litar på.</p>
     <p id="admin-role-status" role="status"></p>
+    <form id="admin-create-form" class="section-card" hidden>
+      <h2>Skapa användare</h2>
+      <label class="form-field">E-post<input name="email" type="email" maxlength="254" required autocomplete="off"></label>
+      <label class="form-field">Lösenord<input name="password" type="password" minlength="8" maxlength="256" required autocomplete="new-password"></label>
+      <p>Kontot blir administratör direkt. Lämna uppgifterna till användaren på ett säkert sätt; ingen inbjudan eller e-post skickas.</p>
+      <button class="primary-button full-button" type="submit">Skapa användare</button>
+      <p id="admin-create-error" role="alert"></p>
+    </form>
     <div id="admin-users" class="item-grid"></div>
     <form id="admin-password-form" class="section-card" hidden>
       <h2>Återställ lösenord</h2>
