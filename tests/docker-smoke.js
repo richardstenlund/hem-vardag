@@ -28,7 +28,7 @@ async function main() {
     console.log('Docker restart persistence verified.');
     return;
   }
-  const admin = await request('/api/auth/login', { method: 'POST', body: { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD } });
+  const admin = await request('/api/auth/login', { method: 'POST', body: { username: process.env.ADMIN_USERNAME || process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD } });
   assert.equal(admin.status, 200);
   assert.ok(admin.cookie, 'Use a fresh disposable test installation; the admin should not yet have MFA.');
   const setup = await request('/api/security/setup', { method: 'POST', cookie: admin.cookie, body: { password: process.env.ADMIN_PASSWORD } });

@@ -137,7 +137,8 @@
 		<section class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
 			<div class="modal-heading"><div><p class="eyebrow">SYNKA DINA SAKER</p><h2 id="auth-title">Spara på ditt konto</h2><p class="modal-description">Dina listor följer med mellan enheter.</p></div><button class="quiet-button close-button" data-action="close-auth" type="button" aria-label="Stäng">×</button></div>
 			<form id="auth-form">
-				<label class="form-field">E-post<input type="email" name="email" required autocomplete="email" placeholder="du@exempel.se"></label>
+				<label class="form-field">Användarnamn<input type="text" name="username" required maxlength="254" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="t.ex. richard"></label>
+				<p class="modal-description">Nytt konto: 2–64 bokstäver, siffror, punkt, bindestreck eller understreck. Har du ett äldre konto använder du din tidigare e-postadress som användarnamn.</p>
 				<label class="form-field">Lösenord<input type="password" name="password" required minlength="8" maxlength="256" autocomplete="current-password" placeholder="Minst 8 tecken"></label>
 				<label class="form-field" id="auth-code-field" hidden>Appkod eller återställningskod<input name="code" maxlength="80" autocomplete="one-time-code"></label>
 				<p class="form-error" id="auth-error" role="alert"></p>

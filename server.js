@@ -5,11 +5,16 @@ const { Pool } = require('pg');
 const { initSecurity, mountSecurity, consumeFactor, audit, passwordMatches } = require('./account-security');
 
 const validEmail = value => typeof value === 'string' && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value);
+const validUsername = value => typeof value === 'string'
+  && ((value.length >= 2 && value.length <= 64 && /^[\p{L}\p{N}._-]+$/u.test(value)) || validEmail(value));
+const accountName = body => String(body?.username ?? body?.email ?? '').trim().toLowerCase();
+const bootstrapName = config => String(config.ADMIN_USERNAME || config.ADMIN_EMAIL || '').trim().toLowerCase();
 const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) => ({
   salt, hash: crypto.scryptSync(password, salt, 64).toString('hex')
 });
+// Keep legacy email columns and response fields so existing accounts, audits and clients survive upgrades.
 const publicUser = user => ({
-  id: user.id, email: user.email, role: user.role,
+  id: user.id, username: user.email, email: user.email, role: user.role,
   twoFactorEnabled: Boolean(user.totp_secret), requiresTwoFactorSetup: false
 });
 const dataLimit = 1024 * 1024;
@@ -41,11 +46,11 @@ async function initDatabase(pool, config = process.env) {
     PRIMARY KEY (household_id, user_id)
   )`);
   await initSecurity(pool);
-  const email = String(config.ADMIN_EMAIL || '').trim().toLowerCase();
+  const email = bootstrapName(config);
   const password = String(config.ADMIN_PASSWORD || '');
   if (email || password) {
-    if (!validEmail(email) || password.length < 12 || password.length > 256) {
-      throw new Error('ADMIN_EMAIL måste vara giltig och ADMIN_PASSWORD ha 12–256 tecken.');
+    if (!validUsername(email) || password.length < 12 || password.length > 256) {
+      throw new Error('ADMIN_USERNAME måste vara giltigt och ADMIN_PASSWORD ha 12–256 tecken.');
     }
     const { salt, hash } = hashPassword(password);
     await pool.query(
@@ -167,12 +172,12 @@ function createApp(pool, config = process.env) {
     });
   }
   async function insertAccount(client, users, email, password) {
-    if (users.some(user => user.email === email)) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
+    if (users.some(user => user.email === email)) return { status: 409, error: 'Det finns redan ett konto med det användarnamnet.' };
     const { salt, hash } = hashPassword(password);
     const { rows: [user] } = await client.query(
       `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, 'admin')
        ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt]);
-    return user ? { status: 201, user } : { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
+    return user ? { status: 201, user } : { status: 409, error: 'Det finns redan ett konto med det användarnamnet.' };
   }
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -214,9 +219,9 @@ function createApp(pool, config = process.env) {
   app.post('/api/auth/register', asyncRoute(async (req, res) => {
     if (config.ALLOW_REGISTRATION === 'false') return res.status(403).json({ error: 'Registrering är avstängd. Kontakta administratören.' });
     if (limit(`register:${req.ip}`, 10, 3600000)) return res.status(429).json({ error: 'För många registreringar. Vänta en timme.' });
-    const email = String(req.body?.email || '').trim().toLowerCase();
+    const email = accountName(req.body);
     const password = String(req.body?.password || '');
-    if (!validEmail(email) || password.length < 8 || password.length > 256) return res.status(400).json({ error: 'Ange giltig e-post och ett lösenord med 8–256 tecken.' });
+    if (!validUsername(email) || password.length < 8 || password.length > 256) return res.status(400).json({ error: 'Ange ett användarnamn med 2–64 bokstäver, siffror, punkt, bindestreck eller understreck och ett lösenord med 8–256 tecken.' });
     const result = await transaction(async client => {
       const { rows: users } = await client.query('SELECT id, email FROM users ORDER BY id FOR UPDATE');
       const result = await insertAccount(client, users, email, password);
@@ -227,7 +232,7 @@ function createApp(pool, config = process.env) {
   }));
   app.post('/api/auth/login', asyncRoute(async (req, res) => {
     if (limit(`login:${req.ip}`, 8, 15 * 60000)) return res.status(429).json({ error: 'För många försök. Vänta 15 minuter.' });
-    const email = String(req.body?.email || '').trim().toLowerCase();
+    const email = accountName(req.body);
     const password = String(req.body?.password || '');
     if (password.length > 256) return res.status(400).json({ error: 'Lösenordet är för långt.' });
     if (limit(`login-email:${email}`, 15, 15 * 60000)) return res.status(429).json({ error: 'För många försök för kontot. Vänta 15 minuter.' });
@@ -341,15 +346,16 @@ function createApp(pool, config = process.env) {
     const { rows: spaces } = await pool.query('SELECT id, name, owner_id FROM household_spaces ORDER BY id');
     const { rows: members } = await pool.query(
       'SELECT m.household_id, u.id, u.email FROM household_members m JOIN users u ON u.id = m.user_id ORDER BY u.id');
-    const bootstrapEmail = String(config.ADMIN_EMAIL || '').trim().toLowerCase();
+    const bootstrapEmail = bootstrapName(config);
     const users = rows.map(user => {
       const space = spaces.find(item => item.owner_id === user.id);
       const lastAdmin = user.active && user.role === 'admin' && rows.filter(item => item.role === 'admin' && item.active).length === 1;
       return {
         ...user,
+        username: user.email,
         twoFactorEnabled: Boolean(security.find(item => item.user_id === user.id)?.totp_secret),
         deletionBlockedReason: lastAdmin ? 'Den sista administratören kan inte tas bort.'
-          : user.email === bootstrapEmail ? 'Ändra ADMIN_EMAIL i serverns inställningar först, annars återskapas kontot vid omstart.'
+          : user.email === bootstrapEmail ? 'Ändra administratörens användarnamn i serverns inställningar först, annars återskapas kontot vid omstart.'
           : space ? 'Överför hushållets ägarskap innan kontot tas bort.' : '',
         ownedHousehold: space ? {
           id: space.id, name: space.name,
@@ -361,10 +367,10 @@ function createApp(pool, config = process.env) {
     res.json({ users, allUsersAdmin: true });
   }));
   app.post('/api/admin/users', ...admin(async (req, res) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
+    const email = accountName(req.body);
     const password = String(req.body?.password || '');
-    if (!validEmail(email) || password.length < 8 || password.length > 256) {
-      return res.status(400).json({ error: 'Ange giltig e-post och ett lösenord med 8–256 tecken.' });
+    if (!validUsername(email) || password.length < 8 || password.length > 256) {
+      return res.status(400).json({ error: 'Ange ett användarnamn med 2–64 bokstäver, siffror, punkt, bindestreck eller understreck och ett lösenord med 8–256 tecken.' });
     }
     const result = await adminTransaction(req, async (client, users) => {
       const result = await insertAccount(client, users, email, password);
@@ -403,12 +409,12 @@ function createApp(pool, config = process.env) {
     const result = await adminTransaction(req, async (client, users) => {
       const target = users.find(user => user.id === id);
       if (!target) return { status: 404, error: 'Kontot hittades inte.' };
-      if (req.body?.email !== target.email) return { status: 400, error: 'Bekräfta kontots e-postadress för att ta bort det.' };
+      if ((req.body?.username ?? req.body?.email) !== target.email) return { status: 400, error: 'Bekräfta kontots användarnamn för att ta bort det.' };
       if (target.active && target.role === 'admin' && users.filter(user => user.role === 'admin' && user.active).length === 1) {
         return { status: 409, error: 'Den sista administratören kan inte tas bort.' };
       }
-      if (target.email === String(config.ADMIN_EMAIL || '').trim().toLowerCase()) {
-        return { status: 409, error: 'Ändra ADMIN_EMAIL i serverns inställningar först, annars återskapas kontot vid omstart.' };
+      if (target.email === bootstrapName(config)) {
+        return { status: 409, error: 'Ändra administratörens användarnamn i serverns inställningar först, annars återskapas kontot vid omstart.' };
       }
       const { rows: [space] } = await client.query('SELECT id FROM household_spaces WHERE owner_id = $1 FOR UPDATE', [id]);
       if (space) return { status: 409, error: 'Överför hushållets ägarskap till en annan medlem innan kontot tas bort.' };

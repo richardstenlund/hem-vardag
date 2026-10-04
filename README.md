@@ -14,7 +14,7 @@ En fristående svensk hemsida för livet hemma: recept, anteckningar, sysslor, i
 - Räkningar, registrerade utgifter och månadssummering.
 - Kalender över daterade poster, dokumentlänkar och checklistmallar.
 - Egna användarkonton och delat hushåll för upp till 10 personer via inbjudningskod.
-- Enkel registrering med e-post och lösenord; alla konton är administratörer. Inaktivering, sessionshantering och administrativ aktivitetslogg.
+- Enkel registrering med användarnamn och lösenord, utan e-post; alla konton är administratörer. Inaktivering, sessionshantering och administrativ aktivitetslogg.
 - Valfri tvåstegsverifiering med autentiseringsapp och engångsåterställningskoder.
 - JSON-backup och återställning av listor.
 
@@ -55,7 +55,7 @@ curl -fsSL https://raw.githubusercontent.com/richardstenlund/hem-vardag/main/ins
 sudo bash /tmp/install-hem-vardag.sh
 ```
 
-Skriptet installerar Docker om det saknas, klonar till `/opt/hem-vardag` och frågar efter **din valda admin-e-post och ditt lösenord** (minst 12 tecken). Lösenordet skrivs inte ut på skärmen och måste bekräftas. Databaslösenordet slumpas. Skriptet skapar `.env`, bygger och startar sidan. **Det skriver inte över en befintlig `.env` eller byter befintliga kontons lösenord.** Vid automatiserad installation kan `ADMIN_EMAIL` och `ADMIN_PASSWORD` anges som miljövariabler; lägg inte lösenord i kommandon som sparas i shellhistoriken.
+Skriptet installerar Docker om det saknas, klonar till `/opt/hem-vardag` och frågar efter **ditt valda admin-användarnamn och lösenord** (minst 12 tecken). Lösenordet skrivs inte ut på skärmen och måste bekräftas. Databaslösenordet slumpas. Skriptet skapar `.env`, bygger och startar sidan. **Det skriver inte över en befintlig `.env` eller byter befintliga kontons lösenord.** Vid automatiserad installation kan `ADMIN_USERNAME` och `ADMIN_PASSWORD` anges som miljövariabler; lägg inte lösenord i kommandon som sparas i shellhistoriken.
 
 Snabbinstallationen tillåter inte enkla citattecken eller radbrytningar i adminuppgifterna; använd manuell installation om du behöver sådana tecken.
 
@@ -82,7 +82,7 @@ nano .env
 
 Fyll i:
 
-- `ADMIN_EMAIL`: administratörens e-postadress.
+- `ADMIN_USERNAME`: administratörens användarnamn, exempelvis `richard`.
 - `ADMIN_PASSWORD`: ett unikt lösenord med minst 12 tecken.
 - `DB_PASSWORD`: ett annat långt, slumpat lösenord.
 - `APP_URL`: exempelvis `http://192.168.1.50:3010`, med din servers adress.
@@ -105,12 +105,12 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 2. Tryck **Logga in** och använd admin-uppgifterna från `.env` eller installationsskriptet.
 3. Välj **Byt lösenord** i menyn och sätt ett eget lösenord. På mobil finns länken i toppfältet.
 4. Du kan använda sidan och **Administrera konton** direkt efter inloggning. **Kontosäkerhet** innehåller valfri tvåstegsverifiering och dina inloggningar.
-5. Alla inloggade kan välja **Administrera konton → Skapa användare**, ange e-post och lösenord (8–256 tecken) och skapa ett nytt administratörskonto. Den som skapar kontot förblir inloggad på sitt eget konto. Lämna uppgifterna säkert till den nya användaren; ingen inbjudan eller e-post skickas. Detta fungerar även när offentlig registrering är avstängd. Andra personer kan också trycka **Skapa konto** i toppfältet när registrering är öppen och loggas då in direkt.
+5. Alla inloggade kan välja **Administrera konton → Skapa användare**, ange användarnamn och lösenord (8–256 tecken) och skapa ett nytt administratörskonto. Den som skapar kontot förblir inloggad på sitt eget konto. Lämna uppgifterna säkert till den nya användaren; ingen inbjudan eller e-post behövs. Detta fungerar även när offentlig registrering är avstängd. Andra personer kan också trycka **Skapa konto** i toppfältet när registrering är öppen och loggas då in direkt.
 6. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 7. Administratören kan återställa glömda lösenord. Inga hushållslistor visas i adminpanelen. Lösenordsåterställning stänger kontots inloggningar men tar inte bort tvåstegsverifieringen.
 8. **Alla konton är administratörer.** Befintliga konton får rollen vid serverstart och nya konton får den direkt. Det finns inga rollknappar eller krav på tvåstegsverifiering. Minst ett aktivt konto måste finnas kvar.
 9. Använd helst **Inaktivera konto** när någon inte längre ska ha åtkomst. Alla sessioner avslutas och nya inloggningar blockeras, men kontot och listorna behålls. **Aktivera konto** tillåter inloggning igen. Hushållsmedlemskap behålls; övriga medlemmar kan fortsätta använda de delade listorna. Den sista aktiva administratören kan inte inaktiveras, tas bort eller nedgraderas.
-10. **Ta bort användare** raderar kontot, dess privata listor och alla inloggningar permanent. Ta först en databasbackup. Delade listor behålls när en medlem tas bort. Äger kontot ett hushåll måste du först välja en annan medlem och **Överför ägarskap**. Om hushållet saknar andra medlemmar behöver ägaren bjuda in någon först. Kontot i `ADMIN_EMAIL` är skyddat eftersom det annars återskapas vid omstart; byt inställningen till en annan administratör före borttagning.
+10. **Ta bort användare** raderar kontot, dess privata listor och alla inloggningar permanent. Ta först en databasbackup. Delade listor behålls när en medlem tas bort. Äger kontot ett hushåll måste du först välja en annan medlem och **Överför ägarskap**. Om hushållet saknar andra medlemmar behöver ägaren bjuda in någon först. Kontot i `ADMIN_USERNAME` (eller äldre `ADMIN_EMAIL`) är skyddat eftersom det annars återskapas vid omstart; byt inställningen till en annan administratör före borttagning.
 
 **Viktigt:** alla som når öppen registrering kan skapa ett administratörskonto och ändra andra kontons lösenord, inaktivera eller ta bort dem. Använd därför sidan endast i en betrodd miljö, exempelvis hemma eller bakom VPN. Tvåstegsverifiering skyddar inloggning till det egna kontot men begränsar inte andra administratörers kontobehörigheter.
 
@@ -118,13 +118,15 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 |---|---|
 | ![Inloggningsrutan](docs/inloggning.png) | ![Djurprofil för en katt](docs/djurprofil.png) |
 
-Admin-kontot skapas vid start om e-postadressen inte finns. En omstart ändrar **inte** ett befintligt kontos lösenord. Ingen e-postserver behövs; automatisk lösenordsåterställning via e-post ingår inte.
+Admin-kontot skapas vid start om användarnamnet inte finns. En omstart ändrar **inte** ett befintligt kontos lösenord. Ingen e-postserver behövs; automatisk lösenordsåterställning via e-post ingår inte.
 
 ### Enkel registrering och standardadministratör
 
-Standardadministratören skapas vid serverstart med `ADMIN_EMAIL` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord eller tvåstegsverifiering. Alla befintliga konton blir administratörer utan att avstängda konton aktiveras.
+Standardadministratören skapas vid serverstart med `ADMIN_USERNAME` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Äldre `ADMIN_EMAIL` fungerar fortfarande om `ADMIN_USERNAME` inte anges. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord eller tvåstegsverifiering. Alla befintliga konton blir administratörer utan att avstängda konton aktiveras.
 
-`ALLOW_REGISTRATION=true` låter personer skapa konto med bara e-post och lösenord. Alla får administratörsbehörighet direkt och kan hantera konton utan extra inställningar. Listorna är fortfarande privata tills man delar hushåll. Hushållets delningskod finns kvar för att dela listor; registrering ansluter inte automatiskt någon till ett hushåll. Gamla `ALL_USERS_ADMIN`-inställningar ignoreras.
+`ALLOW_REGISTRATION=true` låter personer skapa konto med bara användarnamn och lösenord. Användarnamnet har 2–64 bokstäver (även å, ä och ö), siffror, punkt, bindestreck eller understreck, utan mellanslag. Namn trimmas och sparas med små bokstäver; `Richard` och `richard` är samma namn. Alla får administratörsbehörighet direkt och kan hantera konton utan extra inställningar. Listorna är fortfarande privata tills man delar hushåll. Hushållets delningskod finns kvar för att dela listor; registrering ansluter inte automatiskt någon till ett hushåll. Gamla `ALL_USERS_ADMIN`-inställningar ignoreras.
+
+**Befintliga konton:** logga in med din tidigare e-postadress i fältet **Användarnamn** och samma lösenord. Listor, inloggningar, hushåll och tvåstegsverifiering behålls. Gamla API-klienter med fältet `email` stöds fortfarande. Databasens äldre `email`-kolumner och motsvarande kompatibilitetsfält innehåller nu kontonamn; ingen e-postadress krävs för nya konton.
 
 Kontoinbjudningsfunktionen är borttagen. Gamla inbjudningslänkar och API-adresser fungerar inte längre och `INVITE_ONLY` används inte, även om den finns kvar i en äldre `.env`. Befintliga konton och historiska logghändelser behålls; en äldre inbjudningstabell lämnas oanvänd utan att data raderas vid uppgradering. Sätt `ALLOW_REGISTRATION=false` om du vill stänga registreringen. När den är öppen kan alla som når sidan registrera sig och administrera alla konton.
 
@@ -142,7 +144,7 @@ Om containern har den nya versionen men fältet fortfarande visas, kontrollera a
 
 - Välj **Kontosäkerhet** på startsidan om du vill aktivera tvåstegsverifiering. Den är valfri för alla. Befintlig aktiverad verifiering behålls vid uppdatering; den kan stängas av med ditt lösenord och en appkod eller återställningskod.
 - QR-koder genereras lokalt på servern, utan extern QR-tjänst. Nyckeln visas bara under aktiveringen. Bekräfta inom 10 minuter.
-- Om du har aktiverat tvåstegsverifiering: ange först e-post och lösenord, sedan appkod eller återställningskod. Annars behövs bara e-post och lösenord. En appkod kan inte återanvändas; vänta på nästa kod om du nyss använt den. Serverns och telefonens klockor måste vara rätt.
+- Om du har aktiverat tvåstegsverifiering: ange först användarnamn och lösenord, sedan appkod eller återställningskod. Annars behövs bara användarnamn och lösenord. En appkod kan inte återanvändas; vänta på nästa kod om du nyss använt den. Serverns och telefonens klockor måste vara rätt.
 - Varje återställningskod fungerar en gång. **Skapa nya återställningskoder** kräver lösenord och appkod eller befintlig återställningskod och gör alla gamla koder ogiltiga. Ladda ned eller skriv ned dem och förvara separat från telefonen.
 - Om telefonen försvinner: logga in med en återställningskod. Under **Kontosäkerhet** väljer du **Byt autentiseringsapp eller nyckel** och anger lösenord samt en annan återställningskod. Skanna den nya QR-koden, bekräfta och spara de nya återställningskoderna. Du kan också välja **Stäng av tvåstegsverifiering** med lösenord och giltig kod.
 - Om både appen och samtliga återställningskoder är förlorade krävs hjälp av den som administrerar servern; det finns ingen osäker automatisk förbikoppling via lösenordsåterställning. Ha gärna två administratörer och en säker backup.
@@ -151,7 +153,7 @@ Om containern har den nya versionen men fältet fortfarande visas, kontrollera a
 
 ### Administrativ aktivitetslogg
 
-Adminpanelen visar aktör, berört konto, tid och åtgärd för rolländringar, lösenordsåterställning, aktivering/inaktivering, borttagning, ägaröverföring och ändringar av tvåstegsverifiering. **Visa äldre händelser** hämtar 50 åt gången. Loggen innehåller aldrig lösenord, säkerhetsnycklar, koder eller listinnehåll. Händelser behålls även efter att ett konto tagits bort; tänk på att e-postadresser därmed finns kvar i den administrativa loggen. Detta är ingen manipulationssäker extern revisionslogg.
+Adminpanelen visar aktör, berört konto, tid och åtgärd för skapande, lösenordsåterställning, aktivering/inaktivering, borttagning, ägaröverföring och ändringar av tvåstegsverifiering samt historiska rolländringar. **Visa äldre händelser** hämtar 50 åt gången. Loggen innehåller aldrig lösenord, säkerhetsnycklar, koder eller listinnehåll. Händelser behålls även efter att ett konto tagits bort; kontonamn och äldre e-postadresser finns därmed kvar i loggen. Detta är ingen manipulationssäker extern revisionslogg.
 
 ### Rekommenderad användarhantering
 
@@ -163,7 +165,7 @@ Ge varje person ett eget konto och släpp endast in personer du litar på, efter
 |---|---|
 | `APP_PORT` | Port på servern; standard 3010. Ändra om upptagen |
 | `APP_URL` | Adressen användarna öppnar; ska stämma med HTTP/HTTPS och port |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Admin som skapas om kontot saknas; lösenord minst 12 tecken |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Admin som skapas om kontot saknas; lösenord minst 12 tecken. Äldre `ADMIN_EMAIL` används som reserv |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Egna databasuppgifter. Byt inte efter installation utan databasadministration |
 | `SECURE_COOKIES` | `false` för HTTP hemma, `true` bakom HTTPS |
 | `ALLOW_REGISTRATION` | `true` låter användare skapa konton; `false` stänger registreringen |

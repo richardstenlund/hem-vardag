@@ -119,7 +119,7 @@
           remove.disabled = true;
           const feedback = document.querySelector('#admin-role-status');
           try {
-            await api(`/admin/users/${account.id}`, { method: 'DELETE', body: JSON.stringify({ email: account.email }) });
+            await api(`/admin/users/${account.id}`, { method: 'DELETE', body: JSON.stringify({ username: account.username || account.email }) });
             feedback.textContent = `${account.email} har tagits bort.`;
             await load();
           } catch (error) {
@@ -147,10 +147,10 @@
     feedback.textContent = '';
     try {
       const { user } = await api('/admin/users', {
-        method: 'POST', body: JSON.stringify({ email: values.get('email'), password: values.get('password') })
+        method: 'POST', body: JSON.stringify({ username: values.get('username'), password: values.get('password') })
       });
       form.reset();
-      feedback.textContent = `${user.email} har skapats som administratör. Du är fortfarande inloggad på ditt eget konto.`;
+      feedback.textContent = `${user.username} har skapats som administratör. Du är fortfarande inloggad på ditt eget konto.`;
       await load();
     } catch (error) { feedback.textContent = error.message; }
     finally { button.disabled = false; }

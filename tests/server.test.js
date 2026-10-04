@@ -83,7 +83,7 @@ test('every user can create admins and delete accounts without replacing their o
     method: 'POST', cookie, body: { email, password }
   });
   assert.equal((await create(undefined, 'blocked@example.test')).status, 401);
-  assert.equal((await create(alice.cookie, 'invalid')).status, 400);
+  assert.equal((await create(alice.cookie, 'invalid name')).status, 400);
   assert.equal((await create(alice.cookie, 'short@example.test', 'short')).status, 400);
   assert.equal((await create(alice.cookie, 'long@example.test', 'x'.repeat(257))).status, 400);
   const bob = await create(alice.cookie, ' BOB@example.test ');
@@ -125,6 +125,63 @@ test('admin account creation stays available with public registration closed', a
   });
   assert.equal(created.status, 201);
   assert.equal(created.json.user.role, 'admin');
+});
+
+test('usernames support registration, login, admin creation and deletion without email', async t => {
+  const { request } = await fixture(t);
+  const post = (path, body, cookie) => request(path, { method: 'POST', body, cookie });
+  const password = 'UsernamePassword123!';
+  const registered = await post('/api/auth/register', { username: '  Räven_1  ', password });
+  assert.equal(registered.status, 201);
+  assert.equal(registered.json.user.username, 'räven_1');
+  assert.equal(registered.json.user.role, 'admin');
+  assert.equal((await post('/api/auth/register', { username: 'RÄVEN_1', password })).status, 409);
+  for (const username of ['', 'a', 'x'.repeat(65), 'bad name', 'bad/name', '<script>']) {
+    assert.equal((await post('/api/admin/users', { username, password }, registered.cookie)).status, 400, username);
+  }
+  const login = await post('/api/auth/login', { username: 'RÄVEN_1', password });
+  assert.equal(login.status, 200);
+  assert.equal(login.json.user.id, registered.json.user.id);
+  const next = await post('/api/admin/users', { username: 'ab', password }, login.cookie);
+  assert.equal(next.status, 201);
+  const long = await post('/api/admin/users', { username: 'x'.repeat(64), password }, login.cookie);
+  assert.equal(long.status, 201);
+  assert.equal((await request(`/api/admin/users/${next.json.user.id}`, {
+    method: 'DELETE', cookie: login.cookie, body: { username: 'ab' }
+  })).status, 200);
+  assert.equal((await post('/api/auth/login', { username: 'ab', password })).status, 401);
+});
+
+test('username bootstrap preserves legacy accounts, sessions and lists on upgrade', async t => {
+  const config = {};
+  const { request, register, pool } = await fixture(t, config);
+  const legacy = await register('old@example.test');
+  const current = await request('/api/household', { cookie: legacy.cookie });
+  const data = { notes: [{ id: 'kept', title: 'Keep legacy data' }] };
+  await request('/api/household', {
+    method: 'PUT', cookie: legacy.cookie, body: { data, version: current.json.version }
+  });
+  const existingSchema = { query: (sql, values) => sql.startsWith('CREATE TABLE IF NOT EXISTS')
+    ? Promise.resolve({ rows: [] }) : pool.query(sql, values) };
+  Object.assign(config, {
+    ADMIN_USERNAME: 'richard', ADMIN_EMAIL: 'ignored@example.test', ADMIN_PASSWORD: 'BootstrapPassword123!'
+  });
+  await initDatabase(existingSchema, config);
+  assert.equal((await request('/api/me', { cookie: legacy.cookie })).json.user.username, 'old@example.test');
+  assert.deepEqual((await request('/api/household', { cookie: legacy.cookie })).json.data, data);
+  const login = await request('/api/auth/login', {
+    method: 'POST', body: { username: 'old@example.test', password: 'Testpassword123!' }
+  });
+  assert.equal(login.status, 200);
+  const admin = await request('/api/auth/login', {
+    method: 'POST', body: { username: 'Richard', password: 'BootstrapPassword123!' }
+  });
+  assert.equal(admin.status, 200);
+  assert.equal(admin.json.user.username, 'richard');
+  assert.equal((await request(`/api/admin/users/${admin.json.user.id}`, {
+    method: 'DELETE', cookie: login.cookie, body: { username: 'richard' }
+  })).status, 409);
+  assert.equal((await pool.query("SELECT id FROM users WHERE email = 'ignored@example.test'")).rows.length, 0);
 });
 
 test('household creation, join, merging and stale-write protection', async t => {

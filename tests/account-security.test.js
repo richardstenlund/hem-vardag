@@ -81,7 +81,23 @@ test('MFA is optional but enrolled accounts cannot bypass it; recovery codes wor
   assert.ok(JSON.parse(stored).includes(digest(factor.codes[1])));
 });
 
-test('registration needs only email and password and ignores retired invitation settings', async t => {
+test('username accounts retain authenticator and recovery-code security', async t => {
+  const { post, enroll, request } = await fixture(t);
+  const password = 'UsernamePassword123!';
+  const person = await post('/api/auth/register', { username: 'sven', password });
+  assert.equal(person.status, 201);
+  const factor = await enroll(person.cookie, password);
+  const challenge = await post('/api/auth/login', { username: 'sven', password });
+  assert.equal(challenge.json.requiresTwoFactor, true);
+  assert.equal(challenge.cookie, undefined);
+  const recovered = await post('/api/auth/login', { username: 'SVEN', password, code: factor.codes[0] });
+  assert.equal(recovered.status, 200);
+  assert.equal(recovered.json.user.username, 'sven');
+  assert.equal((await request('/api/admin/users', { cookie: recovered.cookie })).status, 200);
+  assert.equal((await post('/api/auth/login', { username: 'sven', password, code: factor.codes[0] })).status, 401);
+});
+
+test('legacy email registration remains compatible and ignores retired invitation settings', async t => {
   const { request, post, register, admin } = await fixture(t, { INVITE_ONLY: 'true' });
   const owner = await admin();
   const registered = await register('Person@example.test');
@@ -92,7 +108,7 @@ test('registration needs only email and password and ignores retired invitation 
   assert.equal(registered.json.user.requiresTwoFactorSetup, false);
   assert.equal((await request('/api/me', { cookie: registered.cookie })).json.user.id, registered.json.user.id);
   assert.equal((await register('person@example.test')).status, 409);
-  assert.equal((await register('bad')).status, 400);
+  assert.equal((await register('bad name')).status, 400);
   assert.equal((await request('/api/admin/invites', { cookie: owner.cookie })).status, 404);
   assert.equal((await post('/api/admin/invites', { email: 'person@example.test' }, owner.cookie)).status, 404);
   assert.equal((await request('/api/admin/invites/1', { method: 'DELETE', cookie: owner.cookie })).status, 404);

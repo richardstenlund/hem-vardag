@@ -36,12 +36,12 @@ if [ ! -f .env ]; then
   CREATED_ENV=1
   IP="$(hostname -I | awk '{print $1}')"
   secret() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
-  ADMIN_EMAIL_VALUE="${ADMIN_EMAIL:-}"
+  ADMIN_USERNAME_VALUE="${ADMIN_USERNAME:-${ADMIN_EMAIL:-}}"
   ADMIN_PASSWORD_VALUE="${ADMIN_PASSWORD:-}"
-  if [ -z "$ADMIN_EMAIL_VALUE" ] || [ -z "$ADMIN_PASSWORD_VALUE" ]; then
-    [ -t 0 ] || die "Ange ADMIN_EMAIL och ADMIN_PASSWORD eller kör installationen i en interaktiv terminal."
-    if [ -z "$ADMIN_EMAIL_VALUE" ]; then
-      read -r -p "Administratörens e-postadress: " ADMIN_EMAIL_VALUE
+  if [ -z "$ADMIN_USERNAME_VALUE" ] || [ -z "$ADMIN_PASSWORD_VALUE" ]; then
+    [ -t 0 ] || die "Ange ADMIN_USERNAME och ADMIN_PASSWORD eller kör installationen i en interaktiv terminal."
+    if [ -z "$ADMIN_USERNAME_VALUE" ]; then
+      read -r -p "Administratörens användarnamn: " ADMIN_USERNAME_VALUE
     fi
     if [ -z "$ADMIN_PASSWORD_VALUE" ]; then
       read -r -s -p "Administratörens lösenord (minst 12 tecken): " ADMIN_PASSWORD_VALUE
@@ -51,14 +51,16 @@ if [ ! -f .env ]; then
       [ "$ADMIN_PASSWORD_VALUE" = "$ADMIN_PASSWORD_CONFIRM" ] || die "Lösenorden stämmer inte överens."
     fi
   fi
-  [[ "$ADMIN_EMAIL_VALUE" =~ ^[^[:space:]]+@[^[:space:]]+\.[^[:space:]]+$ ]] && [ "${#ADMIN_EMAIL_VALUE}" -le 254 ] || die "Ange en giltig admin-e-postadress."
+  if ! { [[ "$ADMIN_USERNAME_VALUE" =~ ^[[:alnum:]åäöÅÄÖ._-]+$ ]] && [ "${#ADMIN_USERNAME_VALUE}" -ge 2 ] && [ "${#ADMIN_USERNAME_VALUE}" -le 64 ]; } && ! { [[ "$ADMIN_USERNAME_VALUE" =~ ^[^[:space:]]+@[^[:space:]]+\.[^[:space:]]+$ ]] && [ "${#ADMIN_USERNAME_VALUE}" -le 254 ]; }; then
+    die "Ange ett användarnamn med 2–64 bokstäver, siffror, punkt, bindestreck eller understreck."
+  fi
   [ "${#ADMIN_PASSWORD_VALUE}" -ge 12 ] && [ "${#ADMIN_PASSWORD_VALUE}" -le 256 ] || die "Adminlösenordet måste ha 12–256 tecken."
-  [[ "$ADMIN_EMAIL_VALUE" != *\'* && "$ADMIN_EMAIL_VALUE" != *$'\n'* && "$ADMIN_EMAIL_VALUE" != *$'\r'* ]] || die "Admin-e-postadressen får inte innehålla enkla citattecken eller radbrytningar."
+  [[ "$ADMIN_USERNAME_VALUE" != *\'* && "$ADMIN_USERNAME_VALUE" != *$'\n'* && "$ADMIN_USERNAME_VALUE" != *$'\r'* ]] || die "Användarnamnet får inte innehålla enkla citattecken eller radbrytningar."
   [[ "$ADMIN_PASSWORD_VALUE" != *\'* && "$ADMIN_PASSWORD_VALUE" != *$'\n'* && "$ADMIN_PASSWORD_VALUE" != *$'\r'* ]] || die "Adminlösenordet får inte innehålla enkla citattecken eller radbrytningar i snabbinstallationen. Använd manuell installation för sådana lösenord."
   APP_URL_VALUE="${APP_URL:-http://${IP:-localhost}:${APP_PORT}}"
   umask 077
   cat > .env <<EOF
-ADMIN_EMAIL='${ADMIN_EMAIL_VALUE}'
+ADMIN_USERNAME='${ADMIN_USERNAME_VALUE}'
 ADMIN_PASSWORD='${ADMIN_PASSWORD_VALUE}'
 DB_NAME=hemvardag
 DB_USER=hemvardag
@@ -85,6 +87,6 @@ done
 [ "$READY" -eq 1 ] || die "Webbappen svarar inte. Kör: cd $INSTALL_DIR && docker compose logs web db"
 printf '\nHem & vardag är installerat!\nÖppna: %s\n' "$(get_env APP_URL)"
 if [ "$CREATED_ENV" -eq 1 ]; then
-  printf 'Administratören har skapats med dina valda uppgifter.\nAlla kan skapa konto med e-post och lösenord och får administratörsbehörighet.\n'
+  printf 'Administratören har skapats med dina valda uppgifter.\nAlla kan skapa konto med användarnamn och lösenord och får administratörsbehörighet.\n'
 fi
 printf 'Uppdatera: cd %s && git pull --ff-only && docker compose up -d --build\n' "$INSTALL_DIR"

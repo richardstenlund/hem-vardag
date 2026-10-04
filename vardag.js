@@ -1046,7 +1046,7 @@
 		authMode = mode;
 		updateAuthMode();
 		$('#auth-modal').hidden = false;
-		$('#auth-form input[name="email"]').focus();
+		$('#auth-form input[name="username"]').focus();
 	}
 
 	async function loadAccountData(guestData) {
@@ -1101,7 +1101,7 @@
 			const guestData = readLocalData();
 			const authResult = await api(authMode === 'register' ? '/auth/register' : '/auth/login', {
 				method: 'POST',
-				body: JSON.stringify({ email: form.get('email'), password: form.get('password'), code: form.get('code') })
+				body: JSON.stringify({ username: form.get('username'), password: form.get('password'), code: form.get('code') })
 			});
 			if (authResult.requiresTwoFactor) {
 				$('#auth-code-field').hidden = false;
