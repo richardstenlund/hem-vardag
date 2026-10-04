@@ -5,7 +5,7 @@ const { createApp, initDatabase } = require('../server');
 const OTPAuth = require('otpauth');
 
 async function fixture(t, config = {}) {
-  config = { ALL_USERS_ADMIN: 'false', INVITE_ONLY: 'false', ...config };
+  config = { ALL_USERS_ADMIN: 'false', ...config };
   const recovery = new Map();
   const db = newDb();
   const { Pool } = db.adapters.createPg();

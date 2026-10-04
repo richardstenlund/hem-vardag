@@ -14,7 +14,7 @@ En fristående svensk hemsida för livet hemma: recept, anteckningar, sysslor, i
 - Räkningar, registrerade utgifter och månadssummering.
 - Kalender över daterade poster, dokumentlänkar och checklistmallar.
 - Egna användarkonton och delat hushåll för upp till 10 personer via inbjudningskod.
-- Kontoinbjudningar, manuella roller, inaktivering, sessionshantering och administrativ aktivitetslogg.
+- Enkel registrering med e-post och lösenord, manuella roller, inaktivering, sessionshantering och administrativ aktivitetslogg.
 - Tvåstegsverifiering med autentiseringsapp och engångsåterställningskoder; obligatorisk för administratörer.
 - JSON-backup och återställning av listor.
 
@@ -55,7 +55,9 @@ curl -fsSL https://raw.githubusercontent.com/richardstenlund/hem-vardag/main/ins
 sudo bash /tmp/install-hem-vardag.sh
 ```
 
-Skriptet installerar Docker om det saknas, klonar till `/opt/hem-vardag`, skapar `.env` med slumpade lösenord, bygger och startar sidan. **Det skriver inte över en befintlig `.env`.** Slutligen visas webbaddress, admin-e-post och lösenord. Spara dessa privat.
+Skriptet installerar Docker om det saknas, klonar till `/opt/hem-vardag` och frågar efter **din valda admin-e-post och ditt lösenord** (minst 12 tecken). Lösenordet skrivs inte ut på skärmen och måste bekräftas. Databaslösenordet slumpas. Skriptet skapar `.env`, bygger och startar sidan. **Det skriver inte över en befintlig `.env` eller byter befintliga kontons lösenord.** Vid automatiserad installation kan `ADMIN_EMAIL` och `ADMIN_PASSWORD` anges som miljövariabler; lägg inte lösenord i kommandon som sparas i shellhistoriken.
+
+Snabbinstallationen tillåter inte enkla citattecken eller radbrytningar i adminuppgifterna; använd manuell installation om du behöver sådana tecken.
 
 Öppna **`http://SERVERNS-IP:3010`**. Hitta serverns IP med `hostname -I`. Du behöver inte lägga till något filnamn efter adressen.
 
@@ -103,7 +105,7 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 2. Tryck **Logga in** och använd admin-uppgifterna från `.env` eller installationsskriptet.
 3. Välj **Byt lösenord** i menyn och sätt ett eget lösenord. På mobil finns länken i toppfältet.
 4. Öppna **Kontosäkerhet**, skapa en autentiseringsnyckel med ditt nuvarande lösenord, skanna QR-koden med en autentiseringsapp och bekräfta appkoden. **Spara återställningskoderna privat innan du lämnar sidan.** Administratörer måste aktivera detta innan de kan administrera konton.
-5. Öppna **Administrera konton**, skapa en inbjudan till personens e-post och skicka länken privat. Personen öppnar länken och registrerar sitt eget konto.
+5. Andra personer trycker **Skapa konto** direkt i toppfältet, fyller i e-post och lösenord (minst 8 tecken) och trycker **Skapa konto**. De loggas in direkt. Ingen kontoinbjudan behövs.
 6. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 7. Administratören kan återställa glömda lösenord. Inga hushållslistor visas i adminpanelen. Lösenordsåterställning stänger kontots inloggningar men tar inte bort tvåstegsverifieringen.
 8. **Manuella roller är standard.** Befintliga konton behåller sina roller och nya konton blir vanliga användare. Välj **Gör till administratör** eller **Gör till användare** och bekräfta. Minst en aktiv administratör måste finnas kvar. Roller gäller direkt; en ny administratör måste aktivera tvåstegsverifiering för att få tillgång till kontohanteringen.
@@ -118,13 +120,13 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 
 Admin-kontot skapas vid start om e-postadressen inte finns. En omstart ändrar **inte** ett befintligt kontos lösenord. Ingen e-postserver behövs; automatisk lösenordsåterställning via e-post ingår inte.
 
-### Inbjudningar och registrering
+### Enkel registrering och standardadministratör
 
-`INVITE_ONLY=true` är standard, även för installationer där variabeln saknas. En kontoinbjudan är bunden till e-postadressen, gäller i 7 dagar och fungerar en gång. Ny inbjudan till samma adress återkallar tidigare oanvända länkar. Administratörer kan återkalla länkar manuellt. Servern lagrar bara en hash av inbjudningskoden; länken visas en gång och skickas inte automatiskt via e-post.
+Standardadministratören skapas vid serverstart med `ADMIN_EMAIL` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord, roll eller tvåstegsverifiering; använd kontohanteringen för befintliga konton.
 
-Kontoinbjudan och hushållets delningskod är **olika saker**: kontoinbjudan skapar ett konto; hushållskoden delar listor. Ingen ansluts automatiskt till ett hushåll.
+`ALLOW_REGISTRATION=true` låter personer skapa konto med bara e-post och lösenord. Nya konton blir vanliga användare med egna privata listor när `ALL_USERS_ADMIN=false`. Administratörer kan ändra roller senare. Hushållets delningskod finns kvar för att dela listor; registrering ansluter inte automatiskt någon till ett hushåll.
 
-Låt inbjudningsregistrering vara på när du vill bjuda in: `ALLOW_REGISTRATION=true` och `INVITE_ONLY=true`. `ALLOW_REGISTRATION=false` stänger **all** registrering, även giltiga inbjudningar. `INVITE_ONLY=false` öppnar registreringen för alla som når sidan och rekommenderas inte för internetåtkomst.
+Kontoinbjudningsfunktionen är borttagen. Gamla inbjudningslänkar och API-adresser fungerar inte längre och `INVITE_ONLY` används inte, även om den finns kvar i en äldre `.env`. Befintliga konton och historiska logghändelser behålls; en äldre inbjudningstabell lämnas oanvänd utan att data raderas vid uppgradering. Sätt `ALLOW_REGISTRATION=false` om du vill stänga registreringen. När den är öppen kan alla som når sidan registrera sig; använd HTTPS och håll administratörsrollerna begränsade.
 
 ### Tvåstegsverifiering och inloggningar
 
@@ -139,7 +141,7 @@ Låt inbjudningsregistrering vara på när du vill bjuda in: `ALLOW_REGISTRATION
 
 ### Administrativ aktivitetslogg
 
-Adminpanelen visar aktör, berört konto, tid och åtgärd för rolländringar, lösenordsåterställning, aktivering/inaktivering, borttagning, ägaröverföring, inbjudningar och ändringar av tvåstegsverifiering. **Visa äldre händelser** hämtar 50 åt gången. Loggen innehåller aldrig lösenord, säkerhetsnycklar, koder eller listinnehåll. Händelser behålls även efter att ett konto tagits bort; tänk på att e-postadresser därmed finns kvar i den administrativa loggen. Detta är ingen manipulationssäker extern revisionslogg.
+Adminpanelen visar aktör, berört konto, tid och åtgärd för rolländringar, lösenordsåterställning, aktivering/inaktivering, borttagning, ägaröverföring och ändringar av tvåstegsverifiering. **Visa äldre händelser** hämtar 50 åt gången. Loggen innehåller aldrig lösenord, säkerhetsnycklar, koder eller listinnehåll. Händelser behålls även efter att ett konto tagits bort; tänk på att e-postadresser därmed finns kvar i den administrativa loggen. Detta är ingen manipulationssäker extern revisionslogg.
 
 ### Rekommenderad användarhantering
 
@@ -156,7 +158,6 @@ Ge varje person ett eget konto. Ha en huvudadministratör och en reserv, och ge 
 | `SECURE_COOKIES` | `false` för HTTP hemma, `true` bakom HTTPS |
 | `ALLOW_REGISTRATION` | `true` låter användare skapa konton; `false` stänger registreringen |
 | `ALL_USERS_ADMIN` | Standard `false`: manuella roller, nya konton blir användare. `true` gör alla konton till administratörer vid start och registrering |
-| `INVITE_ONLY` | Standard `true`: registrering kräver kontoinbjudan. `false` öppnar registreringen |
 | `SESSION_DAYS` | Hur länge inloggningen gäller; standard 30 dagar |
 
 Efter ändring: `docker compose up -d`. Lägg aldrig `.env` eller databasbackuper på GitHub.
@@ -175,7 +176,7 @@ git pull --ff-only
 docker compose up -d --build
 ```
 
-Listor och konton ligger kvar i databasvolymen. Kontosäkerhetens tabeller och kolumner läggs till automatiskt vid start; befintliga roller, lösenord och hushåll bevaras. Befintliga administratörer behöver aktivera tvåstegsverifiering innan de kan öppna adminpanelen. Sätt `ALL_USERS_ADMIN=false`, `INVITE_ONLY=true` och `ALLOW_REGISTRATION=true` i `.env` för manuella roller och inbjudningsregistrering. Stoppa med `docker compose down`. **Använd inte `docker compose down -v`** om du vill behålla databasen och backuperna.
+Listor och konton ligger kvar i databasvolymen. Kontosäkerhetens tabeller och kolumner läggs till automatiskt vid start; befintliga roller, lösenord och hushåll bevaras. Befintliga administratörer behöver aktivera tvåstegsverifiering innan de kan öppna adminpanelen. Sätt `ALL_USERS_ADMIN=false` och `ALLOW_REGISTRATION=true` i `.env` för manuella roller och enkel registrering. Stoppa med `docker compose down`. **Använd inte `docker compose down -v`** om du vill behålla databasen och backuperna.
 
 ## Säkerhetskopiering
 

@@ -5,8 +5,7 @@
   const actionNames = {
     role_changed: 'Ändrade roll', password_reset: 'Återställde lösenord',
     account_deleted: 'Tog bort konto', account_enabled: 'Aktiverade konto', account_disabled: 'Inaktiverade konto',
-    household_owner_changed: 'Överförde hushållsägarskap', invitation_created: 'Skapade kontoinbjudan',
-    invitation_revoked: 'Återkallade kontoinbjudan', invitation_used: 'Använde kontoinbjudan',
+    household_owner_changed: 'Överförde hushållsägarskap',
     two_factor_enabled: 'Aktiverade tvåstegsverifiering', two_factor_disabled: 'Stängde av tvåstegsverifiering',
     two_factor_changed: 'Bytte autentiseringsnyckel',
     recovery_codes_replaced: 'Ersatte återställningskoder'
@@ -22,10 +21,7 @@
     document.querySelector('#user-select').replaceChildren();
     document.querySelector('#admin-password-form').hidden = true;
     document.querySelector('#admin-mode').hidden = true;
-    document.querySelector('#admin-invitations').hidden = true;
     document.querySelector('#admin-audit').hidden = true;
-    document.querySelector('#invite-link').value = '';
-    document.querySelector('#invite-result').hidden = true;
     try {
       const { user } = await api('/me');
       if (user?.role !== 'admin') {
@@ -161,7 +157,6 @@
       }
       status.textContent = `${users.length} konton`;
       document.querySelector('#admin-password-form').hidden = false;
-      await loadInvites();
       await loadAudit();
     } catch (error) { status.textContent = error.message; }
   }
@@ -180,43 +175,6 @@
     } catch (error) { document.querySelector('#admin-error').textContent = error.message; }
     finally { button.disabled = false; }
   });
-  async function loadInvites() {
-    const { invites, inviteOnly, registrationEnabled } = await api('/admin/invites');
-    document.querySelector('#admin-invitations').hidden = false;
-    document.querySelector('#invite-form').hidden = !registrationEnabled;
-    document.querySelector('#registration-mode').textContent = !registrationEnabled
-      ? 'All registrering är avstängd (ALLOW_REGISTRATION=false).'
-      : inviteOnly ? 'Endast inbjudna personer kan registrera sig.'
-        : 'Öppen registrering är aktiverad. Sätt INVITE_ONLY=true för att kräva inbjudan.';
-    const list = document.querySelector('#invite-list');
-    list.replaceChildren();
-    for (const invite of invites) {
-      const row = document.createElement('p');
-      const state = invite.used_at ? 'Använd' : invite.revoked ? 'Återkallad'
-        : Number(invite.expires_at) <= Date.now() ? 'Utgången' : 'Giltig';
-      row.textContent = `${invite.email} · ${state} · Gäller till ${new Date(Number(invite.expires_at)).toLocaleString('sv-SE')} `;
-      if (state === 'Giltig') {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'secondary-button';
-        button.textContent = 'Återkalla';
-        button.addEventListener('click', async () => {
-          if (!confirm(`Återkalla inbjudan för ${invite.email}?`)) return;
-          button.disabled = true;
-          try {
-            await api(`/admin/invites/${invite.id}`, { method: 'DELETE' });
-            await loadInvites();
-            await loadAudit();
-          } catch (error) {
-            document.querySelector('#invite-error').textContent = error.message;
-            button.disabled = false;
-          }
-        });
-        row.append(button);
-      }
-      list.append(row);
-    }
-  }
   async function loadAudit(older = false) {
     const { events, nextBefore: next } = await api(`/admin/audit${older && nextBefore ? `?before=${nextBefore}` : ''}`);
     const list = document.querySelector('#audit-list');
@@ -230,25 +188,6 @@
     document.querySelector('#more-audit').hidden = !nextBefore;
     document.querySelector('#admin-audit').hidden = false;
   }
-  document.querySelector('#invite-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const button = form.querySelector('button');
-    button.disabled = true;
-    document.querySelector('#invite-error').textContent = '';
-    document.querySelector('#invite-link').value = '';
-    document.querySelector('#invite-result').hidden = true;
-    try {
-      const result = await api('/admin/invites', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
-      const fragment = new URLSearchParams({ invite: result.token, email: result.invite.email });
-      document.querySelector('#invite-link').value = `${location.origin}/#${fragment}`;
-      document.querySelector('#invite-result').hidden = false;
-      form.reset();
-      await loadInvites();
-      await loadAudit();
-    } catch (error) { document.querySelector('#invite-error').textContent = error.message; }
-    finally { button.disabled = false; }
-  });
   for (const [id, older] of [['refresh-audit', false], ['more-audit', true]]) {
     document.querySelector(`#${id}`).addEventListener('click', async event => {
       const button = event.currentTarget;

@@ -36,13 +36,30 @@ if [ ! -f .env ]; then
   CREATED_ENV=1
   IP="$(hostname -I | awk '{print $1}')"
   secret() { od -An -N24 -tx1 /dev/urandom | tr -d ' \n'; }
-  ADMIN_EMAIL_VALUE="${ADMIN_EMAIL:-admin@hemvardag.local}"
-  ADMIN_PASSWORD_VALUE="${ADMIN_PASSWORD:-$(secret)}"
+  ADMIN_EMAIL_VALUE="${ADMIN_EMAIL:-}"
+  ADMIN_PASSWORD_VALUE="${ADMIN_PASSWORD:-}"
+  if [ -z "$ADMIN_EMAIL_VALUE" ] || [ -z "$ADMIN_PASSWORD_VALUE" ]; then
+    [ -t 0 ] || die "Ange ADMIN_EMAIL och ADMIN_PASSWORD eller kör installationen i en interaktiv terminal."
+    if [ -z "$ADMIN_EMAIL_VALUE" ]; then
+      read -r -p "Administratörens e-postadress: " ADMIN_EMAIL_VALUE
+    fi
+    if [ -z "$ADMIN_PASSWORD_VALUE" ]; then
+      read -r -s -p "Administratörens lösenord (minst 12 tecken): " ADMIN_PASSWORD_VALUE
+      printf '\n'
+      read -r -s -p "Upprepa lösenordet: " ADMIN_PASSWORD_CONFIRM
+      printf '\n'
+      [ "$ADMIN_PASSWORD_VALUE" = "$ADMIN_PASSWORD_CONFIRM" ] || die "Lösenorden stämmer inte överens."
+    fi
+  fi
+  [[ "$ADMIN_EMAIL_VALUE" =~ ^[^[:space:]]+@[^[:space:]]+\.[^[:space:]]+$ ]] && [ "${#ADMIN_EMAIL_VALUE}" -le 254 ] || die "Ange en giltig admin-e-postadress."
+  [ "${#ADMIN_PASSWORD_VALUE}" -ge 12 ] && [ "${#ADMIN_PASSWORD_VALUE}" -le 256 ] || die "Adminlösenordet måste ha 12–256 tecken."
+  [[ "$ADMIN_EMAIL_VALUE" != *\'* && "$ADMIN_EMAIL_VALUE" != *$'\n'* && "$ADMIN_EMAIL_VALUE" != *$'\r'* ]] || die "Admin-e-postadressen får inte innehålla enkla citattecken eller radbrytningar."
+  [[ "$ADMIN_PASSWORD_VALUE" != *\'* && "$ADMIN_PASSWORD_VALUE" != *$'\n'* && "$ADMIN_PASSWORD_VALUE" != *$'\r'* ]] || die "Adminlösenordet får inte innehålla enkla citattecken eller radbrytningar i snabbinstallationen. Använd manuell installation för sådana lösenord."
   APP_URL_VALUE="${APP_URL:-http://${IP:-localhost}:${APP_PORT}}"
   umask 077
   cat > .env <<EOF
-ADMIN_EMAIL=${ADMIN_EMAIL_VALUE}
-ADMIN_PASSWORD=${ADMIN_PASSWORD_VALUE}
+ADMIN_EMAIL='${ADMIN_EMAIL_VALUE}'
+ADMIN_PASSWORD='${ADMIN_PASSWORD_VALUE}'
 DB_NAME=hemvardag
 DB_USER=hemvardag
 DB_PASSWORD=$(secret)
@@ -52,7 +69,6 @@ SESSION_DAYS=30
 SECURE_COOKIES=false
 ALLOW_REGISTRATION=true
 ALL_USERS_ADMIN=false
-INVITE_ONLY=true
 EOF
 else
   printf '.env finns redan och lämnas orörd.\n'
@@ -70,6 +86,6 @@ done
 [ "$READY" -eq 1 ] || die "Webbappen svarar inte. Kör: cd $INSTALL_DIR && docker compose logs web db"
 printf '\nHem & vardag är installerat!\nÖppna: %s\n' "$(get_env APP_URL)"
 if [ "$CREATED_ENV" -eq 1 ]; then
-  printf 'Administratör: %s\nLösenord: %s\nByt lösenord efter inloggning.\n' "$(get_env ADMIN_EMAIL)" "$(get_env ADMIN_PASSWORD)"
+  printf 'Administratören har skapats med dina valda uppgifter.\nAktivera tvåstegsverifiering under Kontosäkerhet efter inloggning.\n'
 fi
 printf 'Uppdatera: cd %s && git pull --ff-only && docker compose up -d --build\n' "$INSTALL_DIR"

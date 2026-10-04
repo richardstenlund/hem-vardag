@@ -24,11 +24,6 @@ async function initSecurity(pool) {
     totp_secret TEXT, pending_secret TEXT, pending_expires BIGINT,
     recovery_json TEXT NOT NULL DEFAULT '[]', last_counter BIGINT NOT NULL DEFAULT -1
   )`);
-  await pool.query(`CREATE TABLE IF NOT EXISTS registration_invites (
-    id SERIAL PRIMARY KEY, email VARCHAR(254) NOT NULL, token_hash CHAR(64) NOT NULL UNIQUE,
-    expires_at BIGINT NOT NULL, used_at TIMESTAMPTZ, revoked BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`);
   await pool.query(`CREATE TABLE IF NOT EXISTS admin_audit (
     id SERIAL PRIMARY KEY, actor_email VARCHAR(254) NOT NULL, target_email VARCHAR(254) NOT NULL,
     action VARCHAR(50) NOT NULL, detail VARCHAR(200) NOT NULL DEFAULT '',
@@ -66,7 +61,7 @@ async function consumeFactor(client, userId, code) {
 
 function mountSecurity(app, tools) {
   const { pool, authenticated, admin, transaction, adminTransaction, limit,
-    passwordCheck, cookie, config } = tools;
+    passwordCheck, cookie } = tools;
   const secureAction = handler => authenticated(async (req, res) => {
     if (limit(`security:${req.user.id}`, 20, 15 * 60000)) return res.status(429).json({ error: 'För många säkerhetsförsök. Vänta 15 minuter.' });
     await handler(req, res);
@@ -188,37 +183,6 @@ function mountSecurity(app, tools) {
       return { status: 200 };
     });
     if (!result.error && id === req.user.id && !active) cookie(res, '', 0);
-    res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
-  }));
-  app.get('/api/admin/invites', ...admin(async (req, res) => {
-    const { rows } = await pool.query('SELECT id, email, expires_at, used_at, revoked, created_at FROM registration_invites ORDER BY id DESC LIMIT 100');
-    res.json({ invites: rows, inviteOnly: config.INVITE_ONLY !== 'false', registrationEnabled: config.ALLOW_REGISTRATION !== 'false' });
-  }));
-  app.post('/api/admin/invites', ...admin(async (req, res) => {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    if (!tools.validEmail(email)) return res.status(400).json({ error: 'Ange en giltig e-postadress.' });
-    if (config.ALLOW_REGISTRATION === 'false') return res.status(409).json({ error: 'Registrering är avstängd. Aktivera ALLOW_REGISTRATION innan du bjuder in.' });
-    const token = crypto.randomBytes(24).toString('hex');
-    const result = await adminTransaction(req, async (client, users) => {
-      if (users.some(user => user.email === email)) return { status: 409, error: 'Kontot finns redan.' };
-      await client.query('UPDATE registration_invites SET revoked = true WHERE email = $1 AND used_at IS NULL', [email]);
-      const { rows: [invite] } = await client.query('INSERT INTO registration_invites (email, token_hash, expires_at) VALUES ($1, $2, $3) RETURNING id, email, expires_at',
-        [email, digest(token), Date.now() + 7 * 86400000]);
-      await audit(client, req.user.email, email, 'invitation_created');
-      return { status: 201, invite };
-    });
-    res.status(result.status).json(result.error ? { error: result.error } : { invite: result.invite, token });
-  }));
-  app.delete('/api/admin/invites/:id', ...admin(async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Ogiltig inbjudan.' });
-    const result = await adminTransaction(req, async client => {
-      const { rows: [invite] } = await client.query('SELECT email FROM registration_invites WHERE id = $1 FOR UPDATE', [id]);
-      if (!invite) return { status: 404, error: 'Inbjudan hittades inte.' };
-      await client.query('UPDATE registration_invites SET revoked = true WHERE id = $1', [id]);
-      await audit(client, req.user.email, invite.email, 'invitation_revoked');
-      return { status: 200 };
-    });
     res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
   }));
   app.get('/api/admin/audit', ...admin(async (req, res) => {

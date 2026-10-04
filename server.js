@@ -2,7 +2,7 @@ const crypto = require('node:crypto');
 const path = require('node:path');
 const express = require('express');
 const { Pool } = require('pg');
-const { initSecurity, mountSecurity, consumeFactor, audit, digest, passwordMatches } = require('./account-security');
+const { initSecurity, mountSecurity, consumeFactor, audit, passwordMatches } = require('./account-security');
 
 const validEmail = value => typeof value === 'string' && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value);
 const hashPassword = (password, salt = crypto.randomBytes(16).toString('hex')) => ({
@@ -208,25 +208,12 @@ function createApp(pool, config = process.env) {
     if (!validEmail(email) || password.length < 8 || password.length > 256) return res.status(400).json({ error: 'Ange giltig e-post och ett lösenord med 8–256 tecken.' });
     const { salt, hash } = hashPassword(password);
     const result = await transaction(async client => {
-      await client.query('SELECT id FROM users ORDER BY id FOR UPDATE');
-      const token = req.body?.inviteToken;
-      let invite;
-      if (config.INVITE_ONLY !== 'false' || token) {
-        if (typeof token !== 'string' || !/^[a-f0-9]{48}$/.test(token)) return { status: 403, error: 'Du behöver en giltig kontoinbjudan från en administratör.' };
-        const { rows: [found] } = await client.query('SELECT * FROM registration_invites WHERE token_hash = $1 FOR UPDATE', [digest(token)]);
-        if (!found || found.email !== email || found.revoked || found.used_at || Number(found.expires_at) <= Date.now()) {
-          return { status: 403, error: 'Inbjudan stämmer inte med e-posten, har gått ut eller har redan använts.' };
-        }
-        invite = found;
-      }
+      const { rows: users } = await client.query('SELECT id, email FROM users ORDER BY id FOR UPDATE');
+      if (users.some(user => user.email === email)) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
       const { rows: [user] } = await client.query(
         `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, $4)
          ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt, allUsersAdmin(config) ? 'admin' : 'user']);
       if (!user) return { status: 409, error: 'Det finns redan ett konto med den e-posten.' };
-      if (invite) {
-        await client.query('UPDATE registration_invites SET used_at = NOW() WHERE id = $1', [invite.id]);
-        await audit(client, email, email, 'invitation_used');
-      }
       await createSession(user.id, res, req, false, client);
       return { status: 201, user };
     });
@@ -447,7 +434,7 @@ function createApp(pool, config = process.env) {
     res.status(result.status).json(result.error ? { error: result.error } : { ok: true });
   }));
   mountSecurity(app, {
-    pool, config, authenticated, admin, asyncRoute, transaction, adminTransaction, limit, cookie, validEmail,
+    pool, authenticated, admin, transaction, adminTransaction, limit, cookie,
     passwordCheck: (password, user) => passwordMatches(password, user, hashPassword)
   });
   app.use('/api', (req, res) => res.status(404).json({ error: 'API-adressen finns inte.' }));

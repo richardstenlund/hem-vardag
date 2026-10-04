@@ -36,13 +36,11 @@ async function main() {
   const code = new OTPAuth.TOTP({ secret: OTPAuth.Secret.fromBase32(setup.body.secret) }).generate();
   const enabled = await request('/api/security/enable', { method: 'POST', cookie: admin.cookie, body: { code } });
   assert.equal(enabled.status, 200);
-  async function invitedAccount(email) {
-    const invite = await request('/api/admin/invites', { method: 'POST', cookie: admin.cookie, body: { email } });
-    assert.equal(invite.status, 201);
-    return request('/api/auth/register', { method: 'POST', body: { email, password, inviteToken: invite.body.token } });
+  async function registerAccount(email) {
+    return request('/api/auth/register', { method: 'POST', body: { email, password } });
   }
-  const owner = await invitedAccount('ci-owner@example.test');
-  const member = await invitedAccount('ci-member@example.test');
+  const owner = await registerAccount('ci-owner@example.test');
+  const member = await registerAccount('ci-member@example.test');
   assert.equal(owner.status, 201);
   assert.equal(member.status, 201);
   const before = await request('/api/household', { cookie: owner.cookie });
@@ -64,7 +62,7 @@ async function main() {
   })).status, 200);
   const restoredMember = await request('/api/auth/login', { method: 'POST', body: { email: 'ci-member@example.test', password } });
   assert.deepEqual((await request('/api/household', { cookie: restoredMember.cookie })).body.data, data);
-  const disposable = await invitedAccount('ci-disposable@example.test');
+  const disposable = await registerAccount('ci-disposable@example.test');
   assert.equal((await request(`/api/admin/users/${disposable.body.user.id}`, {
     method: 'DELETE', cookie: admin.cookie, body: { email: 'ci-disposable@example.test' }
   })).status, 200);
@@ -75,6 +73,6 @@ async function main() {
   assert.equal((await request('/api/auth/login', { method: 'POST', body: {
     email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD, code: enabled.body.recoveryCodes[0]
   } })).status, 200);
-  console.log('Docker invitations, MFA, suspension, deletion, sessions, audit, shared data and conflict protection verified.');
+  console.log('Docker registration, MFA, suspension, deletion, sessions, audit, shared data and conflict protection verified.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

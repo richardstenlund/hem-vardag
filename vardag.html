@@ -51,6 +51,7 @@
 					<a class="account-button" href="admin.html" id="admin-link" hidden>Administrera konton</a>
 					<button class="account-button" id="password-button" type="button" hidden>Byt lösenord</button>
 					<a class="account-button" href="security.html" id="security-link" hidden>Kontosäkerhet</a>
+					<button class="account-button" id="register-button" type="button">Skapa konto</button>
 					<button class="account-button" id="account-button" type="button">Logga in</button>
 				</div>
 			</header>
@@ -138,12 +139,11 @@
 			<form id="auth-form">
 				<label class="form-field">E-post<input type="email" name="email" required autocomplete="email" placeholder="du@exempel.se"></label>
 				<label class="form-field">Lösenord<input type="password" name="password" required minlength="8" maxlength="256" autocomplete="current-password" placeholder="Minst 8 tecken"></label>
-				<label class="form-field" id="invite-field" hidden>Kontoinbjudan<input name="inviteToken" maxlength="48" autocomplete="off" placeholder="Kod från administratören"></label>
 				<label class="form-field" id="auth-code-field" hidden>Appkod eller återställningskod<input name="code" maxlength="80" autocomplete="one-time-code"></label>
 				<p class="form-error" id="auth-error" role="alert"></p>
 				<button class="primary-button full-button" type="submit" id="auth-submit">Logga in</button>
 			</form>
-			<p class="auth-switch" id="auth-switch">Nytt konto? <button type="button">Skapa ett här</button></p>
+			<p class="auth-switch" id="auth-switch">Nytt konto? <button type="button">Skapa konto</button></p>
 		</section>
 	</div>
 

@@ -31,7 +31,7 @@ async function fixture(t, config = {}) {
   }
   const post = (path, body, cookie) => request(path, { method: 'POST', body, cookie });
   const login = (email, password, code) => post('/api/auth/login', { email, password, code });
-  const register = (email, inviteToken) => post('/api/auth/register', { email, password: 'Testpassword123!', inviteToken });
+  const register = email => post('/api/auth/register', { email, password: 'Testpassword123!' });
   async function enroll(cookie, password) {
     const setup = await post('/api/security/setup', { password }, cookie);
     assert.equal(setup.status, 200);
@@ -81,45 +81,26 @@ test('admins must enroll and MFA login cannot be bypassed; recovery codes work o
   assert.ok(JSON.parse(stored).includes(digest(factor.codes[1])));
 });
 
-test('invite-only registration binds email, expires, revokes and consumes tokens without leaking them', async t => {
-  const { pool, request, post, register, admin } = await fixture(t);
+test('registration needs only email and password and ignores retired invitation settings', async t => {
+  const { request, post, register, admin } = await fixture(t, { INVITE_ONLY: 'true' });
   const owner = await admin();
-  assert.equal((await register('person@example.test')).status, 403);
-  assert.equal((await post('/api/admin/invites', { email: 'bad' }, owner.cookie)).status, 400);
-  const invite = await post('/api/admin/invites', { email: 'Person@example.test' }, owner.cookie);
-  assert.equal(invite.status, 201);
-  assert.match(invite.json.token, /^[a-f0-9]{48}$/);
-  assert.equal(invite.json.invite.email, 'person@example.test');
-  assert.equal((await register('other@example.test', invite.json.token)).status, 403);
-  assert.equal((await register('person@example.test', 'bad')).status, 403);
-  const registered = await register('person@example.test', invite.json.token);
+  const registered = await register('Person@example.test');
   assert.equal(registered.status, 201);
   assert.equal(registered.json.user.role, 'user');
-  assert.equal((await register('person@example.test', invite.json.token)).status, 403);
-  assert.equal((await request('/api/admin/invites', { cookie: registered.cookie })).status, 403);
-  const expired = await post('/api/admin/invites', { email: 'expired@example.test' }, owner.cookie);
-  await pool.query('UPDATE registration_invites SET expires_at = $1 WHERE id = $2', [Date.now() - 1, expired.json.invite.id]);
-  assert.equal((await register('expired@example.test', expired.json.token)).status, 403);
-  const revoked = await post('/api/admin/invites', { email: 'revoked@example.test' }, owner.cookie);
-  assert.equal((await request(`/api/admin/invites/${revoked.json.invite.id}`, { method: 'DELETE', cookie: owner.cookie })).status, 200);
-  assert.equal((await register('revoked@example.test', revoked.json.token)).status, 403);
-  const replaced = await post('/api/admin/invites', { email: 'replace@example.test' }, owner.cookie);
-  const newer = await post('/api/admin/invites', { email: 'replace@example.test' }, owner.cookie);
-  assert.notEqual(replaced.json.token, newer.json.token);
-  assert.equal((await register('replace@example.test', replaced.json.token)).status, 403);
-  const list = await request('/api/admin/invites', { cookie: owner.cookie });
-  assert.equal(list.json.inviteOnly, true);
-  assert.doesNotMatch(JSON.stringify(list.json), /token_hash/);
-  assert.doesNotMatch(JSON.stringify(list.json), new RegExp(newer.json.token));
-  assert.equal((await post('/api/admin/invites', { email: 'person@example.test' }, owner.cookie)).status, 409);
+  assert.equal(registered.json.user.email, 'person@example.test');
+  assert.equal(registered.json.user.requiresTwoFactorSetup, false);
+  assert.equal((await request('/api/me', { cookie: registered.cookie })).json.user.id, registered.json.user.id);
+  assert.equal((await register('person@example.test')).status, 409);
+  assert.equal((await register('bad')).status, 400);
+  assert.equal((await request('/api/admin/invites', { cookie: owner.cookie })).status, 404);
+  assert.equal((await post('/api/admin/invites', { email: 'person@example.test' }, owner.cookie)).status, 404);
+  assert.equal((await request('/api/admin/invites/1', { method: 'DELETE', cookie: owner.cookie })).status, 404);
   const closed = await fixture(t, { ALLOW_REGISTRATION: 'false' });
-  const closedAdmin = await closed.admin();
-  assert.equal((await closed.post('/api/admin/invites', { email: 'blocked@example.test' }, closedAdmin.cookie)).status, 409);
-  assert.equal((await closed.register('blocked@example.test', newer.json.token)).status, 403);
+  assert.equal((await closed.register('blocked@example.test')).status, 403);
 });
 
 test('account suspension revokes access without losing data; last active admin stays available', async t => {
-  const { request, post, login, register, admin, enroll } = await fixture(t, { INVITE_ONLY: 'false' });
+  const { request, post, login, register, admin, enroll } = await fixture(t);
   const owner = await admin();
   const person = await register('person@example.test');
   const first = await request('/api/household', { cookie: person.cookie });
@@ -146,7 +127,7 @@ test('account suspension revokes access without losing data; last active admin s
 });
 
 test('sessions are account-scoped, hide cookie tokens and support single and all-other revocation', async t => {
-  const { request, post, login, register } = await fixture(t, { INVITE_ONLY: 'false' });
+  const { request, post, login, register } = await fixture(t);
   const person = await register('person@example.test');
   const other = await register('other@example.test');
   const second = await login('person@example.test', 'Testpassword123!');
@@ -168,7 +149,7 @@ test('sessions are account-scoped, hide cookie tokens and support single and all
 });
 
 test('optional MFA supports legacy-session verification, code replacement and disable without bypass', async t => {
-  const { pool, request, post, register, enroll } = await fixture(t, { INVITE_ONLY: 'false' });
+  const { pool, request, post, register, enroll } = await fixture(t);
   const person = await register('person@example.test');
   const factor = await enroll(person.cookie, 'Testpassword123!');
   await pool.query('UPDATE sessions SET mfa_verified = false WHERE user_id = $1', [person.json.user.id]);
@@ -187,7 +168,7 @@ test('optional MFA supports legacy-session verification, code replacement and di
 });
 
 test('audit records actor, target and action; survives removal and never includes credentials', async t => {
-  const { request, post, register, admin } = await fixture(t, { INVITE_ONLY: 'false' });
+  const { request, post, register, admin } = await fixture(t);
   const owner = await admin();
   const person = await register('audit@example.test');
   await post(`/api/admin/users/${person.json.user.id}/role`, { role: 'user' }, owner.cookie);
@@ -222,7 +203,7 @@ test('admins can recover with codes and replace their authenticator without disa
 });
 
 test('expired enrollment is rejected and audit pagination returns bounded non-overlapping pages', async t => {
-  const { pool, request, post, register, admin } = await fixture(t, { INVITE_ONLY: 'false' });
+  const { pool, request, post, register, admin } = await fixture(t);
   const owner = await admin();
   const person = await register('expire@example.test');
   const setup = await post('/api/security/setup', { password: 'Testpassword123!' }, person.cookie);

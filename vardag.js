@@ -1034,17 +1034,16 @@
 		const registering = authMode === 'register';
 		$('#auth-title').textContent = registering ? 'Skapa ditt konto' : 'Spara på ditt konto';
 		$('#auth-submit').textContent = registering ? 'Skapa konto' : 'Logga in';
-		$('#auth-switch').innerHTML = registering ? 'Har du redan ett konto? <button type="button">Logga in</button>' : 'Nytt konto? <button type="button">Skapa ett här</button>';
+		$('#auth-switch').innerHTML = registering ? 'Har du redan ett konto? <button type="button">Logga in</button>' : 'Nytt konto? <button type="button">Skapa konto</button>';
 		$('#auth-form input[name="password"]').autocomplete = registering ? 'new-password' : 'current-password';
-		$('#invite-field').hidden = !registering;
 		$('#auth-code-field').hidden = true;
 		$('#auth-code-field input').required = false;
 		$('#auth-code-field input').value = '';
 		$('#auth-error').textContent = '';
 	}
 
-	function openAuthModal() {
-		authMode = 'login';
+	function openAuthModal(mode = 'login') {
+		authMode = mode;
 		updateAuthMode();
 		$('#auth-modal').hidden = false;
 		$('#auth-form input[name="email"]').focus();
@@ -1102,7 +1101,7 @@
 			const guestData = readLocalData();
 			const authResult = await api(authMode === 'register' ? '/auth/register' : '/auth/login', {
 				method: 'POST',
-				body: JSON.stringify({ email: form.get('email'), password: form.get('password'), inviteToken: form.get('inviteToken'), code: form.get('code') })
+				body: JSON.stringify({ email: form.get('email'), password: form.get('password'), code: form.get('code') })
 			});
 			if (authResult.requiresTwoFactor) {
 				$('#auth-code-field').hidden = false;
@@ -1155,6 +1154,7 @@
 		$('#admin-link').hidden = currentUser?.role !== 'admin';
 		$('#password-button').hidden = !currentUser;
 		$('#security-link').hidden = !currentUser;
+		$('#register-button').hidden = Boolean(currentUser);
 	}
 
 	async function changePassword(event) {
@@ -1184,6 +1184,7 @@
 		$('#footer-date').textContent = new Intl.DateTimeFormat('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 		$('#item-form').addEventListener('submit', saveItem);
 		$('#auth-form').addEventListener('submit', handleAuth);
+		$('#register-button').addEventListener('click', () => openAuthModal('register'));
 		$('#password-form').addEventListener('submit', changePassword);
 		document.addEventListener('submit', submitHouseholdForm);
 		$('#import-file').addEventListener('change', restoreBackup);
@@ -1225,15 +1226,6 @@
 			if (!document.hidden) syncSharedHousehold();
 		});
 		render();
-		const invitation = new URLSearchParams(location.hash.slice(1));
-		if (invitation.has('invite')) {
-			authMode = 'register';
-			updateAuthMode();
-			$('#auth-form input[name="inviteToken"]').value = invitation.get('invite');
-			$('#auth-form input[name="email"]').value = invitation.get('email') || '';
-			history.replaceState(null, '', location.pathname + location.search);
-			$('#auth-modal').hidden = false;
-		}
 		if ('serviceWorker' in navigator && ['http:', 'https:'].includes(location.protocol)) {
 			navigator.serviceWorker.register('/sw.js').catch(error => showToast(`Offline-stöd kunde inte aktiveras: ${error.message}`));
 		}

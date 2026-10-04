@@ -24,18 +24,6 @@
       <button class="primary-button full-button" type="submit">Sätt nytt lösenord</button>
       <p id="admin-error" role="alert"></p>
     </form>
-    <section class="section-card" id="admin-invitations" hidden>
-      <h2>Bjud in en användare</h2>
-      <p id="registration-mode"></p>
-      <p>Inbjudan gäller i 7 dagar, fungerar en gång och är bunden till e-postadressen. Dela länken privat. Kontoinbjudan ger inte automatiskt medlemskap i ett hushåll.</p>
-      <form id="invite-form">
-        <label class="form-field">E-post<input name="email" type="email" maxlength="254" required autocomplete="email"></label>
-        <button class="primary-button" type="submit">Skapa inbjudan</button>
-      </form>
-      <label class="form-field" id="invite-result" hidden>Inbjudningslänk – visas bara nu<textarea id="invite-link" rows="4" readonly></textarea></label>
-      <p id="invite-error" role="status"></p>
-      <div id="invite-list"></div>
-    </section>
     <section class="section-card" id="admin-audit" hidden>
       <h2>Administrativ aktivitetslogg</h2>
       <p>Visar vem som ändrade konton och när. Lösenord, säkerhetskoder och listinnehåll loggas aldrig.</p>

@@ -33,18 +33,17 @@ async function runPage(file, responses) {
   return { nodes, requests };
 }
 
-test('admin invitations and audit initialize independently of the password form', async () => {
+test('admin audit initializes independently of the password form without invitation UI', async () => {
   const { nodes, requests } = await runPage('admin.js', {
     '/api/me': { user: { id: 1, email: 'admin@example.test', role: 'admin' } },
     '/api/admin/users': { users: [], allUsersAdmin: false },
-    '/api/admin/invites': { invites: [], inviteOnly: true, registrationEnabled: true },
     '/api/admin/audit': { events: [], nextBefore: null }
   });
-  assert.deepEqual(requests, ['/api/me', '/api/admin/users', '/api/admin/invites', '/api/admin/audit']);
+  assert.deepEqual(requests, ['/api/me', '/api/admin/users', '/api/admin/audit']);
   assert.equal(nodes.get('#admin-status').textContent, '0 konton');
-  assert.equal(nodes.get('#admin-invitations').hidden, false);
+  assert.equal(nodes.has('#admin-invitations'), false);
   assert.equal(nodes.get('#admin-audit').hidden, false);
-  assert.ok(nodes.get('#invite-form').handlers.has('submit'));
+  assert.equal(nodes.has('#invite-form'), false);
 });
 
 test('account security initializes setup and sessions for a pending administrator', async () => {
