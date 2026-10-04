@@ -1,0 +1,4 @@
+# Byt ut vardag.example.com mot din domän.
+vardag.example.com {
+    reverse_proxy 127.0.0.1:3010
+}

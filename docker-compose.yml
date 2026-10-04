@@ -1,0 +1,63 @@
+name: hem-vardag
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-hemvardag}
+      POSTGRES_USER: ${DB_USER:-hemvardag}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Ange DB_PASSWORD i .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3010}:3000"
+    environment:
+      PORT: 3000
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Ange ADMIN_EMAIL i .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Ange ADMIN_PASSWORD i .env}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-hemvardag}
+      DB_USER: ${DB_USER:-hemvardag}
+      DB_PASSWORD: ${DB_PASSWORD:?Ange DB_PASSWORD i .env}
+      APP_URL: ${APP_URL:-http://localhost:3010}
+    depends_on:
+      db:
+        condition: service_healthy
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - household_backups:/backups
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:?Ange DB_PASSWORD i .env}
+      DB_NAME: ${DB_NAME:-hemvardag}
+      DB_USER: ${DB_USER:-hemvardag}
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command:
+      - -ec
+      - |
+        while true; do
+          file="/backups/hem-vardag-$$(date +%Y-%m-%d-%H%M%S).dump"
+          pg_dump -h db -U "$$DB_USER" -d "$$DB_NAME" -Fc -f "$$file.tmp"
+          mv "$$file.tmp" "$$file"
+          find /backups -type f -name '*.dump' -mtime +14 -delete
+          sleep 86400
+        done
+volumes:
+  postgres_data:
+  household_backups:
