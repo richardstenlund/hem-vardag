@@ -28,10 +28,14 @@ async function fixture(t, config = {}) {
     const result = { status: response.status, json, cookie: response.headers.get('set-cookie')?.split(';')[0], response };
     return result;
   }
-  async function register(email) {
+  async function register(email, role = 'user') {
     const result = await request('/api/auth/register', { method: 'POST', body: { email, password: 'Testpassword123!' } });
     assert.equal(result.status, 201);
     assert.match(result.cookie, /^hem_vardag_session=/);
+    if (role !== 'user') {
+      await pool.query('UPDATE users SET role = $1 WHERE id = $2', [role, result.json.user.id]);
+      result.json.user.role = role;
+    }
     return result;
   }
   return { app, pool, request, register };
@@ -76,9 +80,9 @@ test('register, login, logout, change password and account isolation', async t =
   assert.equal((await request('/api/auth/login', { method: 'POST', body: { email: 'alice@example.test', password: 'Newpassword123!' } })).status, 200);
 });
 
-test('every user can create admins and delete accounts without replacing their own session', async t => {
+test('admins create ordinary users without replacing their own session; users cannot administer accounts', async t => {
   const { request, register, pool } = await fixture(t);
-  const alice = await register('alice@example.test');
+  const alice = await register('alice@example.test', 'admin');
   const create = (cookie, email, password = 'Createdpassword123!') => request('/api/admin/users', {
     method: 'POST', cookie, body: { email, password }
   });
@@ -88,7 +92,7 @@ test('every user can create admins and delete accounts without replacing their o
   assert.equal((await create(alice.cookie, 'long@example.test', 'x'.repeat(257))).status, 400);
   const bob = await create(alice.cookie, ' BOB@example.test ');
   assert.equal(bob.status, 201);
-  assert.equal(bob.json.user.role, 'admin');
+  assert.equal(bob.json.user.role, 'user');
   assert.equal(bob.json.user.email, 'bob@example.test');
   assert.equal(bob.cookie, undefined);
   assert.equal((await request('/api/me', { cookie: alice.cookie })).json.user.id, alice.json.user.id);
@@ -97,11 +101,12 @@ test('every user can create admins and delete accounts without replacing their o
     method: 'POST', body: { email: 'bob@example.test', password: 'Createdpassword123!' }
   });
   assert.equal(login.status, 200);
-  assert.equal((await request('/api/admin/users', { cookie: login.cookie })).status, 200);
-  const carol = await create(login.cookie, 'carol@example.test');
+  assert.equal((await request('/api/admin/users', { cookie: login.cookie })).status, 403);
+  assert.equal((await create(login.cookie, 'blocked@example.test')).status, 403);
+  const carol = await create(alice.cookie, 'carol@example.test');
   assert.equal(carol.status, 201);
   assert.equal((await request(`/api/admin/users/${carol.json.user.id}`, {
-    method: 'DELETE', cookie: login.cookie, body: { email: 'carol@example.test' }
+    method: 'DELETE', cookie: alice.cookie, body: { email: 'carol@example.test' }
   })).status, 200);
   const { rows } = await pool.query("SELECT * FROM admin_audit WHERE action = 'account_created'");
   assert.equal(rows.length, 2);
@@ -124,17 +129,18 @@ test('admin account creation stays available with public registration closed', a
     method: 'POST', cookie: login.cookie, body: { email: 'added@example.test', password: 'Testpassword123!' }
   });
   assert.equal(created.status, 201);
-  assert.equal(created.json.user.role, 'admin');
+  assert.equal(created.json.user.role, 'user');
 });
 
 test('usernames support registration, login, admin creation and deletion without email', async t => {
-  const { request } = await fixture(t);
+  const { request, pool } = await fixture(t);
   const post = (path, body, cookie) => request(path, { method: 'POST', body, cookie });
   const password = 'UsernamePassword123!';
   const registered = await post('/api/auth/register', { username: '  Räven_1  ', password });
   assert.equal(registered.status, 201);
   assert.equal(registered.json.user.username, 'räven_1');
-  assert.equal(registered.json.user.role, 'admin');
+  assert.equal(registered.json.user.role, 'user');
+  await pool.query("UPDATE users SET role = 'admin' WHERE id = $1", [registered.json.user.id]);
   assert.equal((await post('/api/auth/register', { username: 'RÄVEN_1', password })).status, 409);
   for (const username of ['', 'a', 'x'.repeat(65), 'bad name', 'bad/name', '<script>']) {
     assert.equal((await post('/api/admin/users', { username, password }, registered.cookie)).status, 400, username);
@@ -179,7 +185,7 @@ test('username bootstrap preserves legacy accounts, sessions and lists on upgrad
   assert.equal(admin.status, 200);
   assert.equal(admin.json.user.username, 'richard');
   assert.equal((await request(`/api/admin/users/${admin.json.user.id}`, {
-    method: 'DELETE', cookie: login.cookie, body: { username: 'richard' }
+    method: 'DELETE', cookie: admin.cookie, body: { username: 'richard' }
   })).status, 409);
   assert.equal((await pool.query("SELECT id FROM users WHERE email = 'ignored@example.test'")).rows.length, 0);
 });
@@ -220,7 +226,7 @@ test('admin bootstrap is usable and does not reset password on restart', async t
   assert.equal(loggedIn.status, 200);
   assert.equal(loggedIn.json.user.role, 'admin');
   const ordinary = await register('person@example.test');
-  assert.equal((await request('/api/admin/users', { cookie: ordinary.cookie })).status, 200);
+  assert.equal((await request('/api/admin/users', { cookie: ordinary.cookie })).status, 403);
   assert.equal((await request('/api/admin/users', { cookie: loggedIn.cookie })).json.users.length, 2);
   assert.equal((await request(`/api/admin/users/${ordinary.json.user.id}/password`, {
     method: 'POST', cookie: loggedIn.cookie, body: { newPassword: 'Resetpassword123!' }
@@ -240,7 +246,8 @@ test('roles apply immediately, protect the last active admin and retain househol
   const person = await register('person@example.test');
   const rolePath = id => `/api/admin/users/${id}/role`;
   const change = (id, role, cookie = admin.cookie) => request(rolePath(id), { method: 'POST', cookie, body: { role } });
-  assert.equal((await change(person.json.user.id, 'admin', person.cookie)).status, 200);
+  assert.equal((await change(person.json.user.id, 'admin', person.cookie)).status, 403);
+  assert.equal((await change(person.json.user.id, 'admin')).status, 200);
   assert.equal((await request(rolePath(person.json.user.id), { method: 'POST', body: { role: 'admin' } })).status, 401);
   assert.equal((await change(9999, 'user')).status, 404);
   assert.equal((await change(person.json.user.id, 'invalid')).status, 400);
@@ -277,7 +284,7 @@ test('roles apply immediately, protect the last active admin and retain househol
 
 test('chosen roles survive restart even with legacy all-admin configuration', async t => {
   const { pool, request, register } = await fixture(t, { ALL_USERS_ADMIN: 'false', INVITE_ONLY: 'true' });
-  const account = await register('everyone@example.test');
+  const account = await register('everyone@example.test', 'admin');
   assert.equal(account.json.user.role, 'admin');
   const list = await request('/api/admin/users', { cookie: account.cookie });
   assert.equal(list.status, 200);
@@ -290,7 +297,7 @@ test('chosen roles survive restart even with legacy all-admin configuration', as
     ? Promise.resolve({ rows: [] }) : pool.query(sql, values) };
   await initDatabase(existingSchema, { ALL_USERS_ADMIN: 'false' });
   assert.equal((await request('/api/me', { cookie: account.cookie })).json.user.role, 'user');
-  const next = await register('next@example.test');
+  const next = await register('next@example.test', 'admin');
   assert.equal(next.json.user.role, 'admin');
   assert.equal((await request(`/api/admin/users/${next.json.user.id}/password`, {
     method: 'POST', cookie: next.cookie, body: { newPassword: 'Resetpassword123!' }
@@ -314,7 +321,7 @@ test('upgrading the legacy role constraint enables readers without changing chos
 
 test('reader permissions block writes but allow joining without modifying shared or private data', async t => {
   const { request, register, pool } = await fixture(t);
-  const owner = await register('owner');
+  const owner = await register('owner', 'admin');
   const reader = await register('reader');
   const write = (account, data, version) => request('/api/household', {
     method: 'PUT', cookie: account.cookie, body: { data, version }
@@ -362,7 +369,7 @@ test('reader permissions block writes but allow joining without modifying shared
 test('account removal checks permissions and preserves the last and bootstrap admins', async t => {
   const { pool, request, register } = await fixture(t, { ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: 'Adminpassword123!' });
   const admin = await request('/api/auth/login', { method: 'POST', body: { email: 'admin@example.test', password: 'Adminpassword123!' } });
-  const person = await register('delete@example.test');
+  const person = await register('delete@example.test', 'admin');
   const remove = (id, email, cookie = admin.cookie) => request(`/api/admin/users/${id}`, {
     method: 'DELETE', cookie, body: { email }
   });

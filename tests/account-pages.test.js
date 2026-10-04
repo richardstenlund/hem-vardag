@@ -8,10 +8,11 @@ async function runPage(file, responses) {
   const nodes = new Map();
   const requests = [];
   const element = () => ({
-    hidden: true, textContent: '', value: '', children: [], handlers: new Map(),
+    hidden: true, disabled: false, textContent: '', value: '', children: [], handlers: new Map(),
     addEventListener(event, handler) { this.handlers.set(event, handler); },
-    replaceChildren() { this.children = []; },
-    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = children; },
+    append(...children) { this.children.push(...children); },
+    add(child) { this.children.push(child); }
   });
   const document = {
     querySelector(selector) {
@@ -22,6 +23,9 @@ async function runPage(file, responses) {
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), {
     document, window: { addEventListener() {} }, URLSearchParams,
+    location: { search: '' },
+    confirm: () => true,
+    Option: function(text, value) { this.text = text; this.value = value; },
     fetch: async url => {
       requests.push(url);
       if (!responses[url]) throw new Error(`Unexpected request: ${url}`);
@@ -55,6 +59,44 @@ test('ordinary users cannot open account management', async () => {
   assert.equal(nodes.get('#admin-create-form').hidden, true);
   assert.equal(nodes.get('#admin-password-form').hidden, true);
   assert.equal(nodes.get('#admin-audit').hidden, true);
+});
+
+test('list tools initialize for readers, tolerate legacy metadata and keep write controls disabled', async () => {
+  const { nodes } = await runPage('tools.js', {
+    '/api/me': { user: { id: 1, username: 'sven', role: 'reader' } },
+    '/api/lists': { lists: [] },
+    '/api/list-data': { version: 1, data: { metadata: { label: 'Legacy' }, notes: [null, { id: 'n', title: 'Note' }] } },
+    '/api/tools/trash': { items: [] },
+    '/api/tools/history': { items: [{ id: 1, actor: 'sven', created_at: 1, summary: [] }] },
+    '/api/tools/files': { items: [{ id: 'f', name: 'Manual.pdf', size: 100 }] },
+    '/api/push': { enabled: false, configured: true, timezone: 'Europe/Stockholm' }
+  });
+  assert.equal(nodes.get('#list-create-form').hidden, true);
+  assert.equal(nodes.get('#file-upload-form').hidden, true);
+  assert.equal(nodes.get('#file-item').children.length, 2);
+  assert.match(nodes.get('#push-status').textContent, /Europe\/Stockholm/);
+  const restore = nodes.get('#history-items').children[0].children[1];
+  assert.equal(restore.disabled, true);
+  await restore.handlers.get('click')();
+  assert.equal(restore.disabled, true);
+  assert.equal(nodes.get('#file-items').children[0].children[1].disabled, true);
+});
+
+test('HTTP-only installations retain tools and explain why push is disabled', async () => {
+  const { nodes } = await runPage('tools.js', {
+    '/api/me': { user: { id: 1, username: 'sven', role: 'user' } },
+    '/api/lists': { lists: [] },
+    '/api/list-data': { version: 0, data: {} },
+    '/api/tools/trash': { items: [] },
+    '/api/tools/history': { items: [] },
+    '/api/tools/files': { items: [] },
+    '/api/push': { enabled: false, configured: false, timezone: 'Europe/Stockholm' }
+  });
+  assert.equal(nodes.get('#list-create-form').hidden, false);
+  assert.equal(nodes.get('#file-upload-form').hidden, false);
+  assert.equal(nodes.get('#push-enable').disabled, true);
+  assert.match(nodes.get('#push-status').textContent, /APP_URL.*HTTPS/);
+  assert.equal(nodes.has('#tools-error'), false);
 });
 
 test('optional account security does not block administration without MFA', async () => {

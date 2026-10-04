@@ -1,4 +1,4 @@
-const cacheName = 'hem-vardag-v6';
+const cacheName = 'hem-vardag-v7';
 const appShell = ['/', '/vardag.html', '/vardag.css', '/vardag.js', '/manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(cacheName).then(cache => cache.addAll(appShell.map(url => new Request(url, { cache: 'reload' })))));
@@ -12,4 +12,14 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
   if (!appShell.includes(url.pathname)) return;
   event.respondWith(fetch(event.request, { cache: 'no-cache' }).catch(() => caches.match(event.request)));
+});
+self.addEventListener('push', event => {
+  const message = event.data ? event.data.json() : {};
+  event.waitUntil(self.registration.showNotification(message.title || 'Hem & vardag', {
+    body: message.body || 'Öppna sidan för att se dina påminnelser.', tag: 'hem-vardag-reminder', data: { url: '/' }
+  }));
+});
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow('/'));
 });

@@ -51,10 +51,17 @@
 					<a class="account-button" href="admin.html" id="admin-link" hidden>Administrera konton</a>
 					<button class="account-button" id="password-button" type="button" hidden>Byt lösenord</button>
 					<a class="account-button" href="security.html" id="security-link" hidden>Kontosäkerhet</a>
+					<a class="account-button" href="tools.html" id="tools-link" hidden>Listor &amp; verktyg</a>
+					<label class="form-field" id="list-select-label" hidden>Lista<select id="list-select"><option value="">Hem-/kontolistor</option></select></label>
 					<button class="account-button" id="register-button" type="button">Skapa konto</button>
 					<button class="account-button" id="account-button" type="button">Logga in</button>
 				</div>
 			</header>
+			<div class="template-buttons">
+				<button class="secondary-button" data-goto="myTasks" type="button">Mina uppgifter</button>
+				<button class="secondary-button" data-goto="loans" type="button">Utlånade saker</button>
+				<button class="secondary-button" data-goto="service" type="button">Service &amp; vårdhistorik</button>
+			</div>
 
 			<section class="page-head" id="page-head">
 				<div>
@@ -96,7 +103,7 @@
 					<section class="section-card maintenance-preview-card"><div class="section-heading"><div><p class="eyebrow">TA HAND OM HEMMET</p><h2>Påminnelser</h2></div><button class="text-button" data-goto="maintenance" type="button">Hemunderhåll →</button></div><div id="maintenance-preview"></div></section>
 					<section class="section-card budget-preview-card"><div class="section-heading"><div><p class="eyebrow">DEN HÄR MÅNADEN</p><h2>Hushållsbudget</h2></div><button class="text-button" data-goto="expenses" type="button">Utgifter →</button></div><div id="budget-preview"></div></section>
 					<section class="section-card calendar-preview-card"><div class="section-heading"><div><p class="eyebrow">DATUM ATT KOMMA IHÅG</p><h2>Kalender</h2></div><button class="text-button" data-goto="calendar" type="button">Öppna →</button></div><div id="calendar-preview"></div></section>
-					<section class="section-card reminders-card"><div class="section-heading"><div><p class="eyebrow">PÅMINNELSER</p><h2>Få en knuff i rätt tid</h2></div><button class="text-button" id="reminders-button" type="button">Aktivera</button></div><p class="preview-empty" id="reminders-status">Aviseringar visas medan Hem & vardag är öppet på den här enheten.</p></section>
+					<section class="section-card reminders-card"><div class="section-heading"><div><p class="eyebrow">PÅMINNELSER</p><h2>Få en knuff i rätt tid</h2></div><button class="text-button" id="reminders-button" type="button">Aktivera</button></div><p class="preview-empty" id="reminders-status">Aviseringar visas medan Hem & vardag är öppet på den här enheten.</p><a href="tools.html">Aktivera pushpåminnelser när sidan är stängd →</a></section>
 					<section class="section-card templates-card"><div class="section-heading"><div><p class="eyebrow">KOM IGÅNG SNABBT</p><h2>Färdiga checklistor</h2></div></div><div class="template-buttons"><button class="secondary-button" data-action="template" data-template="weekly-clean" type="button">Veckostädning</button><button class="secondary-button" data-action="template" data-template="moving" type="button">Flytt</button><button class="secondary-button" data-action="template" data-template="trip" type="button">Resa</button><button class="secondary-button" data-action="template" data-template="weekly-shop" type="button">Veckohandling</button></div></section>
 					<section class="section-card quick-card"><div class="section-heading"><div><p class="eyebrow">SNABBT OCH ENKELT</p><h2>Vad vill du samla?</h2></div></div><div class="quick-links">
 						<button data-action="quick-add" data-type="inventory" type="button"><span class="quick-icon mint">▤</span><span>Sak hemma<small>Mat, städ, prylar</small></span><b>＋</b></button>

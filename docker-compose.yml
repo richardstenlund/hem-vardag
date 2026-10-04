@@ -32,6 +32,7 @@ services:
       DB_USER: ${DB_USER:-hemvardag}
       DB_PASSWORD: ${DB_PASSWORD:?Ange DB_PASSWORD i .env}
       APP_URL: ${APP_URL:-http://localhost:3010}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Stockholm}
     depends_on:
       db:
         condition: service_healthy

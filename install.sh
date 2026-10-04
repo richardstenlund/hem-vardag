@@ -67,6 +67,7 @@ DB_USER=hemvardag
 DB_PASSWORD=$(secret)
 APP_PORT=${APP_PORT}
 APP_URL=${APP_URL_VALUE}
+APP_TIMEZONE=Europe/Stockholm
 SESSION_DAYS=30
 SECURE_COOKIES=false
 ALLOW_REGISTRATION=true
@@ -87,6 +88,6 @@ done
 [ "$READY" -eq 1 ] || die "Webbappen svarar inte. Kör: cd $INSTALL_DIR && docker compose logs web db"
 printf '\nHem & vardag är installerat!\nÖppna: %s\n' "$(get_env APP_URL)"
 if [ "$CREATED_ENV" -eq 1 ]; then
-  printf 'Administratören har skapats med dina valda uppgifter.\nAlla kan skapa konto med användarnamn och lösenord och får administratörsbehörighet.\n'
+  printf 'Administratören har skapats med dina valda uppgifter.\nNya konton får användarrollen. Administratörer kan ändra roller i kontohanteringen.\n'
 fi
 printf 'Uppdatera: cd %s && git pull --ff-only && docker compose up -d --build\n' "$INSTALL_DIR"

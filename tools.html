@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Listor &amp; verktyg | Hem &amp; vardag</title>
+  <link rel="stylesheet" href="vardag.css">
+  <script src="tools.js" defer></script>
+</head>
+<body>
+  <main class="admin-main">
+    <a id="home-link" href="/">← Hem &amp; vardag</a>
+    <h1>Listor &amp; verktyg</h1>
+    <p id="tools-status" role="status"></p>
+    <p id="tools-error" role="alert"></p>
+    <label class="form-field">Lista<select id="tools-list"><option value="">Befintliga hem-/kontolistor</option></select></label>
+    <form id="list-create-form" class="section-card" hidden>
+      <h2>Ny namngiven lista</h2>
+      <label class="form-field">Namn<input name="name" maxlength="80" required placeholder="t.ex. Matbutiken eller Privata anteckningar"></label>
+      <label class="form-field">Synlighet<select name="visibility"><option value="private">Privat – bara mitt konto</option><option value="shared">Delad – hela mitt hushåll</option></select></label>
+      <p>Listan kan innehålla inköp, anteckningar, recept och alla andra typer. Befintliga hem-/kontolistor påverkas inte.</p>
+      <button class="primary-button" type="submit">Skapa lista</button>
+    </form>
+    <section class="section-card">
+      <h2>Papperskorg</h2>
+      <p>Borttagna poster kan återställas inom 30 dagar. Läsare kan se men inte återställa.</p>
+      <div id="trash-items"></div>
+    </section>
+    <section class="section-card">
+      <h2>Ändringshistorik</h2>
+      <p>De senaste 50 ändringarna behålls med vem och när. Återställning ersätter listornas innehåll med versionen före den valda ändringen. Filer påverkas inte.</p>
+      <div id="history-items"></div>
+    </section>
+    <section class="section-card">
+      <h2>Bilder, kvitton &amp; dokument</h2>
+      <p>PDF, PNG och JPEG. Högst 5 MB per fil och 50 MB totalt per lista. Filer följer listans privata/delade behörighet och ingår i databasbackup, inte JSON-backup.</p>
+      <form id="file-upload-form" hidden>
+        <label class="form-field">Koppla till post<select name="itemId" id="file-item"><option value="">Hela listan</option></select></label>
+        <label class="form-field">Fil<input name="file" type="file" accept="application/pdf,image/png,image/jpeg" required></label>
+        <button class="primary-button" type="submit">Ladda upp fil</button>
+      </form>
+      <div id="file-items"></div>
+    </section>
+    <section class="section-card">
+      <h2>Påminnelser när sidan är stängd</h2>
+      <p>Web Push kräver HTTPS och stöd i webbläsaren. På iPhone behöver sidan normalt läggas till på hemskärmen. Servern skickar en generell påminnelse per dag när du har ej klara poster med passerat datum eller bäst före, kl. 09–21 enligt serverns tidszon. Ingen titel eller listinformation skickas till pushleverantören.</p>
+      <button id="push-enable" type="button" class="primary-button">Aktivera på denna enhet</button>
+      <button id="push-disable" type="button" class="secondary-button">Stäng av för alla mina enheter</button>
+      <p id="push-status" role="status"></p>
+    </section>
+  </main>
+</body>
+</html>

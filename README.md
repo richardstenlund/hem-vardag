@@ -14,13 +14,19 @@ En fristående svensk hemsida för livet hemma: recept, anteckningar, sysslor, i
 - Räkningar, registrerade utgifter och månadssummering.
 - Kalender över daterade poster, dokumentlänkar och checklistmallar.
 - Egna användarkonton och delat hushåll för upp till 10 personer via inbjudningskod.
-- Enkel registrering med användarnamn och lösenord, utan e-post; nya konton är administratörer och kan ändras till användare eller läsare. Inaktivering, sessionshantering och administrativ aktivitetslogg.
+- Enkel registrering med användarnamn och lösenord, utan e-post; nya konton är vanliga användare. Administratörer kan välja användare, läsare eller administratör. Inaktivering, sessionshantering och administrativ aktivitetslogg.
 - Valfri tvåstegsverifiering med autentiseringsapp och engångsåterställningskoder.
 - JSON-backup och återställning av listor.
+- Namngivna privata eller delade listor, exempelvis en inköpslista per butik.
+- Ansvariga personer och vyn **Mina uppgifter**, samt ungefärlig kostnad för inköp.
+- Utlånade saker med mottagare, återlämningsdatum och status; service- och vårdhistorik med datum och kostnad.
+- Papperskorg i 30 dagar och de senaste 50 versionerna med vem som skapade, ändrade eller tog bort poster.
+- Uppladdade PDF-filer, PNG- och JPEG-bilder, även kopplade till en viss post.
+- Valfria Web Push-påminnelser när sidan är stängd.
 
-Gäster sparar lokalt på sin enhet. Inloggade användare sparar i PostgreSQL. Listorna blir bara gemensamma om man går med i samma hushåll; då delas **alla hushållslistor**, även anteckningar, dokumentlänkar och utgifter. Sidan kontrollerar versionen vid sparande så att gamla kopior inte skriver över nyare ändringar. Vid konflikt: ta Backup, ladda om och återställ de poster du vill behålla.
+Gäster sparar lokalt på sin enhet. Inloggade användare sparar i PostgreSQL. Befintliga hem-/kontolistor blir gemensamma när man går med i ett hushåll; då delas de gamla listorna och deras filer, även anteckningar, dokumentlänkar och utgifter. Nya namngivna listor kan däremot vara **privata**, även när man tillhör ett hushåll. Sidan kontrollerar versionen vid sparande så att gamla kopior inte skriver över nyare ändringar. Vid konflikt: ta Backup, ladda om och återställ de poster du vill behålla.
 
-Påminnelser är webbläsaraviseringar, inte pushnotiser när sidan är stängd. De kräver att sidan är öppen, att webbläsaren stöder funktionen och normalt HTTPS (eller localhost). Dokumentdelen lagrar länkar och anteckningar, inte filer. Budgeten är en enkel utgiftsöversikt, inte bankkoppling eller bokföring.
+Vanliga webbläsaraviseringar kräver att sidan är öppen. För påminnelser när sidan är stängd aktiverar du Web Push under **Listor & verktyg**; det kräver HTTPS, en kompatibel webbläsare och internet på servern. Dokumentdelen lagrar länkar och anteckningar; filer laddas upp under **Listor & verktyg**. Budgeten är en enkel utgiftsöversikt, inte bankkoppling eller bokföring.
 
 ## Vad behöver jag?
 
@@ -104,15 +110,15 @@ Hälsokontrollen ska svara med `"ok":true` och `"application":"hem-vardag"`. Öp
 1. Öppna sidan via serveradressen, **inte genom att dubbelklicka på HTML-filen**.
 2. Tryck **Logga in** och använd admin-uppgifterna från `.env` eller installationsskriptet.
 3. Välj **Byt lösenord** i menyn och sätt ett eget lösenord. På mobil finns länken i toppfältet.
-4. Du kan använda sidan och **Administrera konton** direkt efter inloggning. **Kontosäkerhet** innehåller valfri tvåstegsverifiering och dina inloggningar.
-5. Administratörer kan välja **Administrera konton → Skapa användare**, ange användarnamn och lösenord (8–256 tecken) och skapa ett nytt administratörskonto. Efter skapandet kan du välja **Användare** eller **Läsare** under **Roll** och trycka **Spara roll**. Den som skapar kontot förblir inloggad på sitt eget konto. Lämna uppgifterna säkert till den nya användaren; ingen inbjudan eller e-post behövs. Detta fungerar även när offentlig registrering är avstängd. Andra personer kan också trycka **Skapa konto** i toppfältet när registrering är öppen och loggas då in direkt.
+4. Du kan använda sidan direkt efter inloggning. Administratörer har även **Administrera konton**. **Kontosäkerhet** innehåller valfri tvåstegsverifiering och dina inloggningar.
+5. Administratörer kan välja **Administrera konton → Skapa användare**, ange användarnamn och lösenord (8–256 tecken) och skapa ett vanligt användarkonto. Efter skapandet kan du välja roll och trycka **Spara roll**. Den som skapar kontot förblir inloggad på sitt eget konto. Lämna uppgifterna säkert till den nya användaren; ingen inbjudan eller e-post behövs. Detta fungerar även när offentlig registrering är avstängd. Andra personer kan också trycka **Skapa konto** i toppfältet när registrering är öppen och loggas då in direkt.
 6. För gemensamma listor: välj **Dela hushåll**, skapa ett hushåll och dela koden. De andra loggar in och väljer **Gå med** med koden.
 7. Administratören kan återställa glömda lösenord. Inga hushållslistor visas i adminpanelen. Lösenordsåterställning stänger kontots inloggningar men tar inte bort tvåstegsverifieringen.
-8. **Välj roll efter skapandet.** Nya konton är administratörer som tidigare. Välj **Administratör**, **Användare** eller **Läsare** under **Roll** på kontot och tryck **Spara roll**. Ändringen gäller direkt på servern även för redan inloggade och behålls efter omstart. Ladda om sidan för att uppdatera knapparna efter en rolländring på en annan enhet. Minst en aktiv administratör måste finnas kvar. Tvåstegsverifiering är fortsatt valfri. Om du ändrar din egen roll förlorar du åtkomst till kontohanteringen.
+8. **Välj roll efter skapandet.** Nya konton är vanliga användare. Välj **Administratör**, **Användare** eller **Läsare** under **Roll** på kontot och tryck **Spara roll**. Ändringen gäller direkt på servern även för redan inloggade och behålls efter omstart. Ladda om sidan för att uppdatera knapparna efter en rolländring på en annan enhet. Minst en aktiv administratör måste finnas kvar. Tvåstegsverifiering är fortsatt valfri. Om du ändrar din egen roll förlorar du åtkomst till kontohanteringen.
 9. Använd helst **Inaktivera konto** när någon inte längre ska ha åtkomst. Alla sessioner avslutas och nya inloggningar blockeras, men kontot och listorna behålls. **Aktivera konto** tillåter inloggning igen. Hushållsmedlemskap behålls; övriga medlemmar kan fortsätta använda de delade listorna. Den sista aktiva administratören kan inte inaktiveras, tas bort eller nedgraderas.
 10. **Ta bort användare** raderar kontot, dess privata listor och alla inloggningar permanent. Ta först en databasbackup. Delade listor behålls när en medlem tas bort. Äger kontot ett hushåll måste du först välja en annan medlem och **Överför ägarskap**. Om hushållet saknar andra medlemmar behöver ägaren bjuda in någon först. Kontot i `ADMIN_USERNAME` (eller äldre `ADMIN_EMAIL`) är skyddat eftersom det annars återskapas vid omstart; byt inställningen till en annan administratör före borttagning.
 
-**Viktigt:** alla som når öppen registrering kan skapa ett administratörskonto och ändra andra kontons lösenord, inaktivera eller ta bort dem. Använd därför sidan endast i en betrodd miljö, exempelvis hemma eller bakom VPN. Tvåstegsverifiering skyddar inloggning till det egna kontot men begränsar inte andra administratörers kontobehörigheter.
+**Viktigt:** nya konton får inte längre automatiskt administratörsbehörighet. Befintliga administratörer behåller dock sin roll; gå igenom kontona efter uppdateringen. Administratörer kan återställa andra kontons lösenord, inaktivera och ta bort dem. Ge endast den rollen till betrodda personer. Tvåstegsverifiering skyddar inloggning till det egna kontot men begränsar inte andra administratörers kontobehörigheter.
 
 | Logga in eller skapa konto | Anpassad djurprofil |
 |---|---|
@@ -124,11 +130,11 @@ Admin-kontot skapas vid start om användarnamnet inte finns. En omstart ändrar 
 
 Standardadministratören skapas vid serverstart med `ADMIN_USERNAME` och `ADMIN_PASSWORD` som du själv väljer i installationen eller `.env`. Äldre `ADMIN_EMAIL` fungerar fortfarande om `ADMIN_USERNAME` inte anges. Det finns inget gemensamt standardlösenord. Om kontot redan finns ändras inte dess lösenord, roll eller tvåstegsverifiering. Befintliga kontons roller och status bevaras.
 
-`ALLOW_REGISTRATION=true` låter personer skapa konto med bara användarnamn och lösenord. Användarnamnet har 2–64 bokstäver (även å, ä och ö), siffror, punkt, bindestreck eller understreck, utan mellanslag. Namn trimmas och sparas med små bokstäver; `Richard` och `richard` är samma namn. Alla får administratörsbehörighet direkt och kan hantera konton utan extra inställningar. Listorna är fortfarande privata tills man delar hushåll. Hushållets delningskod finns kvar för att dela listor; registrering ansluter inte automatiskt någon till ett hushåll. Gamla `ALL_USERS_ADMIN`-inställningar ignoreras.
+`ALLOW_REGISTRATION=true` låter personer skapa konto med bara användarnamn och lösenord. Användarnamnet har 2–64 bokstäver (även å, ä och ö), siffror, punkt, bindestreck eller understreck, utan mellanslag. Namn trimmas och sparas med små bokstäver; `Richard` och `richard` är samma namn. Nya konton får vanlig användarroll, även om de skapas i adminpanelen. Listorna är privata tills man delar hushåll eller väljer en delad namngiven lista. Registrering ansluter inte automatiskt någon till ett hushåll. Gamla `ALL_USERS_ADMIN`-inställningar ignoreras.
 
 **Befintliga konton:** logga in med din tidigare e-postadress i fältet **Användarnamn** och samma lösenord. Listor, inloggningar, hushåll och tvåstegsverifiering behålls. Gamla API-klienter med fältet `email` stöds fortfarande. Databasens äldre `email`-kolumner och motsvarande kompatibilitetsfält innehåller nu kontonamn; ingen e-postadress krävs för nya konton.
 
-Kontoinbjudningsfunktionen är borttagen. Gamla inbjudningslänkar och API-adresser fungerar inte längre och `INVITE_ONLY` används inte, även om den finns kvar i en äldre `.env`. Befintliga konton och historiska logghändelser behålls; en äldre inbjudningstabell lämnas oanvänd utan att data raderas vid uppgradering. Sätt `ALLOW_REGISTRATION=false` om du vill stänga registreringen. När den är öppen kan alla som når sidan registrera sig och administrera alla konton.
+Kontoinbjudningsfunktionen är borttagen. Gamla inbjudningslänkar och API-adresser fungerar inte längre och `INVITE_ONLY` används inte, även om den finns kvar i en äldre `.env`. Befintliga konton och historiska logghändelser behålls; en äldre inbjudningstabell lämnas oanvänd utan att data raderas vid uppgradering. Sätt `ALLOW_REGISTRATION=false` om du vill stänga registreringen. När den är öppen kan alla som når sidan registrera sig som vanliga användare.
 
 Om det gamla fältet **Kontoinbjudan** fortfarande visas: uppdatera installationen med `bash update.sh` och ladda sedan om sidan med Ctrl+F5 (eller stäng och öppna sidan på mobilen). Sidfilerna måste kontrolleras mot servern vid laddning, och offline-cachen byts vid denna uppgradering. Rensa inte webbplatsdata som första åtgärd: osynkade gästlistor kan då försvinna.
 
@@ -168,7 +174,7 @@ Adminpanelen visar aktör, berört konto, tid och åtgärd för skapande, lösen
 
 Rollerna ger aldrig automatisk åtkomst till någon annans privata listor eller andra hushåll. Läsare behåller lokala gästlistor på enheten utan att importera dem. När en läsare går med i ett hushåll behålls tidigare privata listor i databasen utan att delas; hushållets listor visas i stället. Administratörer kan dock återställa andras lösenord, så ge endast den rollen till betrodda personer.
 
-Ge varje person ett eget konto. Gör konton som inte behöver hantera andra konton till vanliga användare. Nya konton får fortfarande administratörsbehörighet, så stäng offentlig registrering med `ALLOW_REGISTRATION=false` om endast administratörer ska skapa konton. Inaktivera hellre än att radera direkt, ta backup före borttagning och begränsa nätverksåtkomst till hemnät eller VPN. Använd HTTPS om sidan nås utanför hemmet.
+Ge varje person ett eget konto. Gör konton som inte behöver hantera andra konton till vanliga användare. Nya konton får användarrollen; stäng ändå offentlig registrering med `ALLOW_REGISTRATION=false` om endast administratörer ska skapa konton. Inaktivera hellre än att radera direkt, ta backup före borttagning och begränsa nätverksåtkomst till hemnät eller VPN. Använd HTTPS om sidan nås utanför hemmet.
 
 ## Inställningar
 
@@ -176,6 +182,7 @@ Ge varje person ett eget konto. Gör konton som inte behöver hantera andra kont
 |---|---|
 | `APP_PORT` | Port på servern; standard 3010. Ändra om upptagen |
 | `APP_URL` | Adressen användarna öppnar; ska stämma med HTTP/HTTPS och port |
+| `APP_TIMEZONE` | Tidszon för pushpåminnelser; standard `Europe/Stockholm` |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Admin som skapas om kontot saknas; lösenord minst 12 tecken. Äldre `ADMIN_EMAIL` används som reserv |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Egna databasuppgifter. Byt inte efter installation utan databasadministration |
 | `SECURE_COOKIES` | `false` för HTTP hemma, `true` bakom HTTPS |
@@ -200,9 +207,37 @@ docker compose up -d --build
 
 Listor och konton ligger kvar i databasvolymen. Befintliga roller, lösenord, hushåll och kontostatus bevaras; vanliga användare blir inte automatiskt administratörer vid omstart. Tvåstegsverifiering krävs inte men befintlig aktiverad verifiering behålls. `INVITE_ONLY` och `ALL_USERS_ADMIN` används inte längre. Sätt `ALLOW_REGISTRATION=true` för enkel registrering. Stoppa med `docker compose down`. **Använd inte `docker compose down -v`** om du vill behålla databasen och backuperna.
 
+## Listor och vardagsverktyg
+
+- Öppna **Listor & verktyg → Ny namngiven lista**, ange namn och välj **Privat** eller **Delad**. Delade listor kräver hushållsmedlemskap. Synligheten väljs vid skapandet; en privat lista delas inte när du går med i ett hushåll.
+- Välj lista i toppfältet för att arbeta med dess inköp, anteckningar, recept och övriga typer. **Hem-/kontolistor** är det befintliga innehållet. Gästlistor importeras endast till dessa, inte till en namngiven lista.
+- Skapa exempelvis *Matbutiken*, *Byggvaruhuset* och *Djurbutiken*. Varje inköpspost kan ha ungefärlig kostnad och ansvarig person. Kostnaden summeras för ej klara inköp i det aktuella filtret.
+- Välj **Ansvarig** när du skapar eller redigerar en post. **Mina uppgifter** visar ej klara tilldelade poster i vald lista. I en privat lista kan bara det egna kontot tilldelas; i en delad lista kan hushållets medlemmar väljas.
+- **Utlånade saker** har mottagare och återlämningsdatum som visas i kalendern; bocka av när saken kommit tillbaka. **Service & vårdhistorik** lagrar utförd åtgärd, datum, sak/djur och kostnad. Utförda historikhändelser visas inte som öppna uppgifter eller påminnelser. Lägg nästa planerade datum under exempelvis djur eller hemunderhåll.
+
+### Papperskorg, ändringshistorik och filer
+
+Under **Listor & verktyg**, välj samma lista som på startsidan:
+
+- **Papperskorg:** borttagna listposter kan återställas inom 30 dagar. Utgångna poster döljs direkt och rensas vid sparande eller serverns timvisa städning.
+- **Ändringshistorik:** de senaste 50 ändringarna visar aktör, tid och upp till 100 skapade/ändrade/borttagna titlar. **Återställ** ersätter listans innehåll med versionen före ändringen. Återställningen loggas också och borttagna poster går till papperskorgen.
+- Både papperskorg och historik följer listans behörighet; administratörsrollen ger inte åtkomst till andra personers privata listor. Läsare kan läsa men inte återställa.
+- **Bilder, kvitton & dokument:** ladda upp PDF, PNG eller JPEG, högst 5 MB per fil och 50 MB totalt per lista. Koppla filen till en post för att visa dess nedladdningslänk på posten. Filerna lagras i PostgreSQL och kräver inloggning med åtkomst till listan, inte bara kännedom om länken.
+- Filer ingår i databasbackupen. Filborttagning är permanent och går inte till papperskorgen. Återställning av listversioner påverkar inte filer. Befintliga kontolisters filer följer med när en redigerande användare delar hushåll; läsare delar inte sina filer.
+
+### Web Push när sidan är stängd
+
+Aktivera under **Listor & verktyg → Påminnelser när sidan är stängd** på varje enhet. Kräver HTTPS, notifieringstillstånd och en webbläsare med Web Push. Ställ även `APP_URL` till sidans HTTPS-adress, inte localhost; annars är aktivering avstängd med en förklaring. På iPhone/iPad behöver webbappen normalt installeras på hemskärmen. Stöd beror på webbläsare och enhetsinställningar; HTTP över det lokala nätverket räcker inte.
+
+Servern kontrollerar varje minut och skickar högst en generell påminnelse per enhet och lokal dag mellan kl. 09 och 21 i `APP_TIMEZONE`. Den utlöses av ej klara poster med förfallet datum eller passerat bäst före i tillgängliga hem-/kontolistor och namngivna listor. Datum i servicehistoriken avser redan utförda åtgärder och utlöser inte push.
+
+Meddelandet innehåller ingen posttitel eller listinformation. Leveransen går via webbläsarens pushleverantör (Google, Mozilla, Apple eller Windows) och servern behöver utgående internetåtkomst. VAPID-nycklar skapas automatiskt och sparas i databasen. Återställ därför databasen, inte bara listornas JSON, vid flytt till en annan server. Leveransen kan fördröjas eller blockeras av operativsystemet.
+
+**Stäng av för alla mina enheter** tar bort kontots prenumerationer. På en delad enhet bör du stänga av push innan du lämnar över den; vanlig utloggning stänger inte av redan aktiverade påminnelser.
+
 ## Säkerhetskopiering
 
-**Backup** på sidan laddar ned aktuella hushållslistor som JSON. **Återställ** slår ihop en sådan kopia med befintliga listor. Det är inte en backup av alla användarkonton.
+**Backup** på sidan laddar ned innehållet i vald lista som JSON. **Återställ** slår ihop en sådan kopia med innehållet i den valda listan. Den innehåller inte användarkonton, filer, papperskorg, versionshistorik eller pushnycklar. Läsare kan ladda ned JSON men inte återställa den.
 
 Containern `backup` tar en databasbackup vid start och sedan varje dygn; äldre än 14 dagar rensas. Backuperna ligger på samma server och bör kopieras till en annan enhet. Kontrollera att tjänsten fungerar med `docker compose logs backup`.
 

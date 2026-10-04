@@ -3,6 +3,8 @@ const path = require('node:path');
 const express = require('express');
 const { Pool } = require('pg');
 const { initSecurity, mountSecurity, consumeFactor, audit, passwordMatches } = require('./account-security');
+const { initTools, mountTools, recordChange } = require('./household-tools');
+const { initPush, mountPush } = require('./push-reminders');
 
 const validEmail = value => typeof value === 'string' && value.length <= 254 && /^\S+@\S+\.\S+$/.test(value);
 const validUsername = value => typeof value === 'string'
@@ -48,6 +50,8 @@ async function initDatabase(pool, config = process.env) {
     PRIMARY KEY (household_id, user_id)
   )`);
   await initSecurity(pool);
+  await initTools(pool);
+  await initPush(pool);
   const email = bootstrapName(config);
   const password = String(config.ADMIN_PASSWORD || '');
   if (email || password) {
@@ -91,6 +95,7 @@ function createApp(pool, config = process.env) {
   const cleanup = setInterval(() => {
     for (const [key, entry] of attempts) if (entry.expires <= Date.now()) attempts.delete(key);
     pool.query('DELETE FROM sessions WHERE expires_at <= $1', [Date.now()]).catch(console.error);
+    pool.query('DELETE FROM list_trash WHERE deleted_at < $1', [Date.now() - 30 * 86400000]).catch(console.error);
   }, 60 * 60 * 1000);
   cleanup.unref();
   app.locals.stopCleanup = () => clearInterval(cleanup);
@@ -138,7 +143,7 @@ function createApp(pool, config = process.env) {
       return { data: personal ? JSON.parse(personal.data_json) : null, household: null, version: `p:${userId}:${personal?.version || 0}` };
     }
     const { rows: members } = await pool.query(
-      `SELECT u.email, m.role FROM household_members m JOIN users u ON u.id = m.user_id
+      `SELECT u.id, u.email, m.role FROM household_members m JOIN users u ON u.id = m.user_id
        WHERE m.household_id = $1 ORDER BY u.id`, [shared.id]);
     return {
       data: JSON.parse(shared.data_json), version: `h:${shared.id}:${shared.version}`,
@@ -176,7 +181,7 @@ function createApp(pool, config = process.env) {
     if (users.some(user => user.email === email)) return { status: 409, error: 'Det finns redan ett konto med det användarnamnet.' };
     const { salt, hash } = hashPassword(password);
     const { rows: [user] } = await client.query(
-      `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, 'admin')
+      `INSERT INTO users (email, password_hash, password_salt, role) VALUES ($1, $2, $3, 'user')
        ON CONFLICT (email) DO NOTHING RETURNING id, email, role`, [email, hash, salt]);
     return user ? { status: 201, user } : { status: 409, error: 'Det finns redan ett konto med det användarnamnet.' };
   }
@@ -189,6 +194,7 @@ function createApp(pool, config = process.env) {
     if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
     next();
   });
+  app.use('/api/tools/files', express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '2mb' }));
   app.use('/api', (req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || !req.headers.origin) return next();
@@ -203,7 +209,7 @@ function createApp(pool, config = process.env) {
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(__dirname, 'vardag.html'));
   });
-  const publicFiles = new Set(['vardag.html', 'vardag.css', 'vardag.js', 'admin.html', 'admin.js', 'security.html', 'security.js', 'sw.js', 'manifest.webmanifest']);
+  const publicFiles = new Set(['vardag.html', 'vardag.css', 'vardag.js', 'admin.html', 'admin.js', 'security.html', 'security.js', 'tools.html', 'tools.js', 'sw.js', 'manifest.webmanifest']);
   app.get('/:file', (req, res, next) => {
     if (!publicFiles.has(req.params.file)) return next();
     res.setHeader('Cache-Control', 'no-cache');
@@ -289,13 +295,15 @@ function createApp(pool, config = process.env) {
       if (!writer?.active || writer.role === 'reader') return false;
       const { rows: [membership] } = await client.query('SELECT household_id FROM household_members WHERE user_id = $1', [req.user.id]);
       if (membership) {
-        const { rows: [space] } = await client.query('SELECT version FROM household_spaces WHERE id = $1 FOR UPDATE', [membership.household_id]);
+        const { rows: [space] } = await client.query('SELECT version, data_json FROM household_spaces WHERE id = $1 FOR UPDATE', [membership.household_id]);
         if (req.body.version !== `h:${membership.household_id}:${space.version}`) return null;
+        await recordChange(client, `household:${membership.household_id}`, req.user.email, JSON.parse(space.data_json), data);
         await client.query('UPDATE household_spaces SET data_json = $1, version = version + 1 WHERE id = $2', [json, membership.household_id]);
         return `h:${membership.household_id}:${space.version + 1}`;
       }
-      const { rows: [personal] } = await client.query('SELECT version FROM household_data WHERE user_id = $1 FOR UPDATE', [req.user.id]);
+      const { rows: [personal] } = await client.query('SELECT version, data_json FROM household_data WHERE user_id = $1 FOR UPDATE', [req.user.id]);
       if (req.body.version !== `p:${req.user.id}:${personal?.version || 0}`) return null;
+      await recordChange(client, `personal:${req.user.id}`, req.user.email, JSON.parse(personal?.data_json || '{}'), data);
       await client.query(
         `INSERT INTO household_data (user_id, data_json, version) VALUES ($1, $2, 1)
          ON CONFLICT (user_id) DO UPDATE SET data_json = EXCLUDED.data_json, version = household_data.version + 1`, [req.user.id, json]);
@@ -335,13 +343,23 @@ function createApp(pool, config = process.env) {
           if (member.role !== 'reader') {
             const json = JSON.stringify(mergeHouseholdData(JSON.parse(found.data_json), JSON.parse(personal?.data_json || '{}')));
             if (Buffer.byteLength(json) > dataLimit) return { error: 'De sammanslagna listorna överstiger 1 MB.', status: 413 };
+            await recordChange(client, `household:${found.id}`, req.user.email, JSON.parse(found.data_json), JSON.parse(json));
             await client.query('UPDATE household_spaces SET data_json = $1, version = version + 1 WHERE id = $2', [json, found.id]);
           }
           space = found;
         }
         await client.query('INSERT INTO household_members (household_id, user_id, role) VALUES ($1, $2, $3)',
           [space.id, req.user.id, mode === 'create' ? 'owner' : 'member']);
-        if (member.role !== 'reader') await client.query('DELETE FROM household_data WHERE user_id = $1', [req.user.id]);
+        if (member.role !== 'reader') {
+          const { rows: files } = await client.query('SELECT size FROM list_files WHERE scope = $1 OR scope = $2',
+            [`personal:${req.user.id}`, `household:${space.id}`]);
+          if (files.reduce((sum, file) => sum + file.size, 0) > 50 * 1024 * 1024) {
+            throw Object.assign(new Error('Hushållets filer överstiger 50 MB efter sammanslagning.'),
+              { status: 413, publicMessage: 'Ta bort filer innan du delar hushåll: filerna skulle överstiga 50 MB.' });
+          }
+          await client.query('UPDATE list_files SET scope = $1 WHERE scope = $2', [`household:${space.id}`, `personal:${req.user.id}`]);
+          await client.query('DELETE FROM household_data WHERE user_id = $1', [req.user.id]);
+        }
         return {};
       });
       if (result.error) return res.status(result.status).json({ error: result.error });
@@ -442,6 +460,11 @@ function createApp(pool, config = process.env) {
       }
       const { rows: [space] } = await client.query('SELECT id FROM household_spaces WHERE owner_id = $1 FOR UPDATE', [id]);
       if (space) return { status: 409, error: 'Överför hushållets ägarskap till en annan medlem innan kontot tas bort.' };
+      const { rows: privateLists } = await client.query('SELECT id FROM named_lists WHERE owner_id = $1 AND household_id IS NULL', [id]);
+      for (const scope of [`personal:${id}`, ...privateLists.map(list => `list:${list.id}`)]) {
+        for (const table of ['list_history', 'list_trash', 'list_files']) await client.query(`DELETE FROM ${table} WHERE scope = $1`, [scope]);
+      }
+      await client.query('DELETE FROM named_lists WHERE owner_id = $1 AND household_id IS NULL', [id]);
       await client.query('DELETE FROM users WHERE id = $1', [id]);
       await audit(client, req.user.email, target.email, 'account_deleted');
       return { status: 200 };
@@ -468,12 +491,15 @@ function createApp(pool, config = process.env) {
     pool, authenticated, admin, transaction, adminTransaction, limit, cookie,
     passwordCheck: (password, user) => passwordMatches(password, user, hashPassword)
   });
+  mountTools(app, { pool, authenticated, transaction });
+  const stopPush = mountPush(app, { pool, authenticated, config, transaction });
+  app.locals.stopCleanup = () => { clearInterval(cleanup); stopPush(); };
   app.use('/api', (req, res) => res.status(404).json({ error: 'API-adressen finns inte.' }));
   app.use((req, res) => res.status(404).send('Sidan finns inte.'));
   app.use((error, req, res, next) => {
     console.error(error);
     res.status(error.status === 413 ? 413 : error.type === 'entity.parse.failed' ? 400 : 500)
-      .json({ error: error.status === 413 ? 'För stor begäran.' : error.type === 'entity.parse.failed' ? 'Ogiltig JSON.' : 'Ett serverfel uppstod. Kontrollera serverloggen.' });
+      .json({ error: error.status === 413 ? error.publicMessage || 'För stor begäran.' : error.type === 'entity.parse.failed' ? 'Ogiltig JSON.' : 'Ett serverfel uppstod. Kontrollera serverloggen.' });
   });
   return app;
 }

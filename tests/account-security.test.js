@@ -93,7 +93,7 @@ test('username accounts retain authenticator and recovery-code security', async 
   const recovered = await post('/api/auth/login', { username: 'SVEN', password, code: factor.codes[0] });
   assert.equal(recovered.status, 200);
   assert.equal(recovered.json.user.username, 'sven');
-  assert.equal((await request('/api/admin/users', { cookie: recovered.cookie })).status, 200);
+  assert.equal((await request('/api/admin/users', { cookie: recovered.cookie })).status, 403);
   assert.equal((await post('/api/auth/login', { username: 'sven', password, code: factor.codes[0] })).status, 401);
 });
 
@@ -102,8 +102,8 @@ test('legacy email registration remains compatible and ignores retired invitatio
   const owner = await admin();
   const registered = await register('Person@example.test');
   assert.equal(registered.status, 201);
-  assert.equal(registered.json.user.role, 'admin');
-  assert.equal((await request('/api/admin/users', { cookie: registered.cookie })).status, 200);
+  assert.equal(registered.json.user.role, 'user');
+  assert.equal((await request('/api/admin/users', { cookie: registered.cookie })).status, 403);
   assert.equal(registered.json.user.email, 'person@example.test');
   assert.equal(registered.json.user.requiresTwoFactorSetup, false);
   assert.equal((await request('/api/me', { cookie: registered.cookie })).json.user.id, registered.json.user.id);
@@ -134,7 +134,7 @@ test('account suspension revokes access without losing data; last active admin s
   const restored = await login('person@example.test', 'Testpassword123!');
   assert.equal(restored.status, 200);
   assert.deepEqual((await request('/api/household', { cookie: restored.cookie })).json.data, data);
-  assert.equal((await request('/api/admin/users', { cookie: restored.cookie })).status, 200);
+  assert.equal((await request('/api/admin/users', { cookie: restored.cookie })).status, 403);
   assert.equal((await post(activePath, { active: false }, owner.cookie)).status, 200);
   assert.equal((await post(`/api/admin/users/${owner.json.user.id}/active`, { active: false }, owner.cookie)).status, 409);
   assert.equal((await post(`/api/admin/users/${owner.json.user.id}/role`, { role: 'user' }, owner.cookie)).status, 409);

@@ -52,8 +52,8 @@ async function main() {
   assert.equal(joined.status, 200);
   assert.deepEqual(joined.body.data, data);
   assert.equal((await request('/api/household', { method: 'PUT', cookie: owner.cookie, body: { data: {}, version: space.body.version } })).status, 409);
-  assert.equal(owner.body.user.role, 'admin');
-  assert.equal((await request('/api/admin/users', { cookie: owner.cookie })).status, 200);
+  assert.equal(owner.body.user.role, 'user');
+  assert.equal((await request('/api/admin/users', { cookie: owner.cookie })).status, 403);
   assert.equal((await request(`/api/admin/users/${member.body.user.id}/active`, {
     method: 'POST', cookie: admin.cookie, body: { active: false }
   })).status, 200);
@@ -72,7 +72,7 @@ async function main() {
   const sessionList = await request('/api/security/sessions', { cookie: admin.cookie });
   assert.equal(sessionList.body.sessions[0].current, true);
   assert.equal((await request('/api/auth/login', { method: 'POST', body: {
-    email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD, code: enabled.body.recoveryCodes[0]
+    username: process.env.ADMIN_USERNAME || process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD, code: enabled.body.recoveryCodes[0]
   } })).status, 200);
   console.log('Docker registration, MFA, suspension, deletion, sessions, audit, shared data and conflict protection verified.');
 }

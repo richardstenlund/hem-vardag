@@ -14,7 +14,7 @@
     <h1>Administrera konton</h1>
     <p>Här kan administratörer skapa konton, ändra roller, återställa lösenord, inaktivera och ta bort konton. Minst en aktiv administratör måste finnas kvar. Om kontot äger ett delat hushåll måste ägarskapet först överföras. Kontonas listor visas inte här.</p>
     <p id="admin-status" role="status"></p>
-    <p id="admin-mode" hidden>Nya konton blir administratörer. Välj roll på kontot och tryck Spara roll. Registrering kräver bara användarnamn och lösenord, utan e-post eller inbjudan. Tvåstegsverifiering är valfri.</p>
+    <p id="admin-mode" hidden>Nya konton blir vanliga användare. Välj roll på kontot och tryck Spara roll. Registrering kräver bara användarnamn och lösenord, utan e-post eller inbjudan. Tvåstegsverifiering är valfri.</p>
     <section class="section-card">
       <h2>Roller och rättigheter</h2>
       <p><strong>Administratör:</strong> läsa, skapa, ändra, bocka av och ta bort innehåll i sitt hushåll samt hantera konton och roller.</p>
@@ -28,7 +28,7 @@
       <label class="form-field">Användarnamn<input name="username" type="text" minlength="2" maxlength="64" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="t.ex. richard"></label>
       <p>Använd 2–64 bokstäver, siffror, punkt, bindestreck eller understreck. Stora och små bokstäver räknas som samma namn.</p>
       <label class="form-field">Lösenord<input name="password" type="password" minlength="8" maxlength="256" required autocomplete="new-password"></label>
-      <p>Kontot blir administratör direkt. Efter skapandet kan du välja Användare eller Läsare och trycka Spara roll. Lämna uppgifterna till användaren på ett säkert sätt; ingen inbjudan eller e-post skickas.</p>
+      <p>Kontot blir vanlig användare. Efter skapandet kan du välja Administratör eller Läsare och trycka Spara roll. Lämna uppgifterna till användaren på ett säkert sätt; ingen inbjudan eller e-post skickas.</p>
       <button class="primary-button full-button" type="submit">Skapa användare</button>
       <p id="admin-create-error" role="alert"></p>
     </form>

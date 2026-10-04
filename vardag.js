@@ -7,7 +7,7 @@
 		recipes: { title: 'Recept', singular: 'recept', icon: '♨', description: 'Samla favoriterna och slipp leta efter den där goda rätten.', categories: ['Middag', 'Lunch', 'Frukost', 'Fika', 'Övrigt'], fields: { ingredients: 'Ingredienser, en per rad', detail: 'Så gör du', quantity: 'Tid / portioner' } },
 		tasks: { title: 'Att göra', singular: 'uppgift', icon: '✓', description: 'Fånga upp det som behöver bli gjort, i din egen takt.', categories: ['Hemma', 'Jobb', 'Personligt', 'Övrigt'], checklist: true, fields: { detail: 'Anteckning', due: 'Datum' } },
 		meals: { title: 'Veckans måltider', singular: 'måltid', icon: '♨', description: 'Planera veckans mat, knyt ihop med dina favoritrecept och samla ingredienser till inköpen.', categories: ['Frukost', 'Lunch', 'Middag', 'Mellanmål', 'Fika'], fields: { mealType: 'Måltid', due: 'Datum', detail: 'Anteckning', recipe: 'Sparat recept' } },
-		shopping: { title: 'Inköpslista', singular: 'vara', icon: '🛒', description: 'Samla allt på ett ställe och bocka av när du handlar.', categories: ['Frukt & grönt', 'Mejeri', 'Kött & fisk', 'Skafferi', 'Frys', 'Städ', 'Badrum', 'Djur', 'Övrigt'], checklist: true, fields: { quantity: 'Mängd', detail: 'Märke eller anteckning' } },
+		shopping: { title: 'Inköpslista', singular: 'vara', icon: '🛒', description: 'Samla allt på ett ställe och bocka av när du handlar. Välj en namngiven lista för olika butiker.', categories: ['Frukt & grönt', 'Mejeri', 'Kött & fisk', 'Skafferi', 'Frys', 'Städ', 'Badrum', 'Djur', 'Övrigt'], checklist: true, fields: { quantity: 'Mängd', amount: 'Ungefärlig kostnad för hela posten (kr)', detail: 'Märke eller anteckning' } },
 		inventory: { title: 'Vad vi har hemma', singular: 'sak', icon: '▤', description: 'Håll koll på mat, städartiklar, verktyg och allt annat — med plats, mängd och bäst före.', categories: ['Skafferi', 'Kyl & frys', 'Städ', 'Badrum', 'Djurmat', 'Djurvård', 'Verktyg', 'Förråd', 'Kontor', 'Övrigt'], fields: { quantity: 'Mängd hemma', unit: 'Enhet', minimum: 'Fyll på när mängden är under', expiry: 'Bäst före', detail: 'Var finns den? Anteckning' } },
 		pets: { title: 'Djur & omsorg', singular: 'djur', icon: '♡', description: 'Samla djurens rutiner, mat, vård, försäkring och veterinärbesök.', categories: ['Hund', 'Katt', 'Kanin', 'Fågel', 'Fisk', 'Annat djur'], fields: {} },
 		chores: { title: 'Sysslor & rutiner', singular: 'syssla', icon: '✓', description: 'Få koll på vardagsstädning, tvätt och andra återkommande rutiner — klart är klart.', categories: ['Kök', 'Badrum', 'Tvätt', 'Städning', 'Sopor & återvinning', 'Växter', 'Husdjur', 'Övrigt'], checklist: true, fields: { due: 'Nästa gång', repeat: 'Upprepa', detail: 'Anteckning' } },
@@ -18,6 +18,8 @@
 		errands: { title: 'Ärenden & ute', singular: 'ärende', icon: '↗', description: 'Samla saker att fixa både hemma och på språng.', categories: ['Ärende', 'Hemma', 'Utomhus', 'Telefon', 'Övrigt'], checklist: true, fields: { detail: 'Plats eller anteckning', due: 'Datum' } },
 		expenses: { title: 'Hushållsbudget', singular: 'utgift', icon: 'kr', description: 'Följ hushållets utgifter månad för månad.', categories: ['Mat', 'Boende', 'Transport', 'Hälsa', 'Barn & djur', 'Fritid', 'Övrigt'], fields: { amount: 'Belopp (kr)', due: 'Datum', detail: 'Anteckning' } },
 		documents: { title: 'Dokument & länkar', singular: 'länk', icon: '↗', description: 'Samla länkar till manualer, garantier och viktiga dokument.', categories: ['Manualer & garantier', 'Försäkring & avtal', 'Viktiga kontakter', 'Hem & adresser', 'Övrigt'], fields: { reference: 'Länk (https://...)', detail: 'Anteckning' } },
+		loans: { title: 'Utlånade saker', singular: 'utlåning', icon: '↗', description: 'Vad har du lånat ut, till vem och när ska det komma tillbaka?', categories: ['Verktyg', 'Böcker', 'Utrustning', 'Övrigt'], checklist: true, fields: { reference: 'Utlånad till', due: 'Lämnas tillbaka', detail: 'Anteckning' } },
+		service: { title: 'Service & vårdhistorik', singular: 'historikhändelse', icon: '⌂', description: 'Registrera utförd service, filterbyten, vaccinationer och vård. Datumet avser utförd åtgärd.', categories: ['Bil & cykel', 'Hem & vitvaror', 'Djur & vård', 'Övrigt'], fields: { reference: 'Sak, djur eller leverantör', due: 'Utförd den', amount: 'Kostnad (kr)', detail: 'Vad gjordes?' } },
 		calendar: { title: 'Kalender', singular: 'händelse', icon: '▦', description: 'Se kommande datum från hushållets listor.', categories: [], fields: {} }
 	};
 	const animalKinds = [
@@ -35,12 +37,17 @@
 		horse: { routine: 'Utevistelse och skötsel', placeholder: 'Utevistelse, motion, hovvård och utrustning...' },
 		other: { routine: 'Skötsel och rutiner', placeholder: 'Skriv ner det som är viktigt för just ditt djur...' }
 	};
-	const views = { home: { title: 'Översikt', eyebrow: 'SÖNDAGSKOLL', description: 'Samla små och stora saker på ett ställe — hemma och ute.' }, ...Object.fromEntries(Object.entries(types).map(([key, value]) => [key, value])) };
+	const views = { home: { title: 'Översikt', eyebrow: 'SÖNDAGSKOLL', description: 'Samla små och stora saker på ett ställe — hemma och ute.' }, myTasks: { title: 'Mina uppgifter', description: 'Ej klara poster i vald lista som har tilldelats ditt konto.' }, ...Object.fromEntries(Object.entries(types).map(([key, value]) => [key, value])) };
 	const emptyData = () => Object.fromEntries(Object.keys(types).map(key => [key, []]));
 	let data = emptyData();
 	let activeView = 'home';
 	let activeFilter = 'all';
 	let currentUser = null;
+	let currentListId = new URLSearchParams(location.search).get('list') || '';
+	let listMembers = [];
+	let listFiles = [];
+	const listQuery = () => currentListId ? `?list=${encodeURIComponent(currentListId)}` : '';
+	const dataEndpoint = () => currentListId ? `/list-data${listQuery()}` : '/household';
 	let accountReady = false;
 	let householdInfo = null;
 	let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -126,6 +133,7 @@
 				lastDone: typeof item.lastDone === 'string' ? item.lastDone.slice(0, 10) : '',
 				lastPaid: typeof item.lastPaid === 'string' ? item.lastPaid.slice(0, 10) : '',
 				templateKey: typeof item.templateKey === 'string' ? item.templateKey.slice(0, 40) : '',
+				assigneeId: Number.isSafeInteger(item.assigneeId) ? item.assigneeId : null,
 				completed: Boolean(item.completed),
 				pinned: Boolean(item.pinned),
 				createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString()
@@ -185,7 +193,8 @@
 			pendingSaves += 1;
 			$('#save-status').textContent = householdInfo ? 'Sparar i hushållet…' : 'Sparar på ditt konto…';
 			const snapshot = JSON.stringify(data);
-			saveQueue = saveQueue.then(() => api('/household', { method: 'PUT', body: JSON.stringify({ data: JSON.parse(snapshot), version: dataVersion }) }))
+			const endpoint = dataEndpoint();
+			saveQueue = saveQueue.then(() => api(endpoint, { method: 'PUT', body: JSON.stringify({ data: JSON.parse(snapshot), version: dataVersion }) }))
 				.then(result => {
 					dataVersion = result.version;
 					if (pendingSaves === 1) unsynced = false;
@@ -219,7 +228,7 @@
 		$('#dashboard').hidden = view !== 'home';
 		$('#list-view').hidden = view === 'home' || view === 'calendar';
 		$('#calendar-view').hidden = view !== 'calendar';
-		$('.add-control').hidden = view === 'calendar';
+		$('.add-control').hidden = ['calendar', 'myTasks'].includes(view);
 		$('#page-eyebrow').textContent = view === 'home' ? 'SÖNDAGSKOLL' : 'DIN VARDAG, SAMLAD';
 		$('#page-title').textContent = view === 'home' ? 'Bra att ha hemma' : views[view].title;
 		$('#page-description').textContent = view === 'pets' && data.pets.length
@@ -230,9 +239,9 @@
 				? `Håll koll på hemmet och ${data.pets.map(item => item.title).join(', ')} — allt samlat på ett ställe.`
 				: 'Håll koll på vad som finns, vad som behövs och allt som gör hemmet till ditt.';
 		}
-		$('#add-button-label').textContent = view === 'home' ? 'Lägg till nytt' : `Lägg till ${types[view].singular}`;
+		$('#add-button-label').textContent = view === 'home' || view === 'myTasks' ? 'Lägg till nytt' : `Lägg till ${types[view].singular}`;
 		document.querySelectorAll('.nav-link').forEach(button => button.classList.toggle('active', button.dataset.view === view));
-		$('#filter-group').innerHTML = view !== 'home' && types[view].checklist
+		$('#filter-group').innerHTML = view !== 'home' && types[view]?.checklist
 			? `<button class="filter-button active" data-filter="all" type="button">Alla</button><button class="filter-button" data-filter="open" type="button">Kvar</button><button class="filter-button" data-filter="completed" type="button">Klara</button>`
 			: '';
 		render();
@@ -255,7 +264,7 @@
 			const repeats = ['chores', 'maintenance', 'bills'].includes(type) && item.repeat && item.repeat !== 'none';
 			footer = repeats
 				? `<button class="complete-button" data-action="complete-repeat" data-type="${type}" data-id="${escapeHtml(item.id)}" type="button">${type === 'bills' ? '✓ Betald' : '✓ Klar idag'}</button>${item.lastDone ? `<span class="preview-meta">Senast ${escapeHtml(formatDate(item.lastDone))}</span>` : ''}`
-				: `<label class="item-check"><input type="checkbox" data-action="toggle" data-type="${type}" data-id="${escapeHtml(item.id)}" ${item.completed ? 'checked' : ''} ${readOnly() ? 'disabled' : ''}> ${item.completed ? 'Klart' : 'Markera klar'}</label>`;
+				: `<label class="item-check"><input type="checkbox" data-action="toggle" data-type="${type}" data-id="${escapeHtml(item.id)}" ${item.completed ? 'checked' : ''} ${readOnly() ? 'disabled' : ''}> ${type === 'loans' ? (item.completed ? 'Återlämnad' : 'Markera återlämnad') : item.completed ? 'Klart' : 'Markera klar'}</label>`;
 		} else if (item.quantity) {
 			footer = `<span>${escapeHtml(item.quantity)}</span>`;
 		} else if (item.due) {
@@ -277,9 +286,13 @@
 			: type === 'bills' || type === 'expenses' ? `${billAmount || expenseAmount}${(billAmount || expenseAmount) && footer ? ' · ' : ''}${footer}`
 				: stock || pin || amount || footer;
 		const recipeActions = type === 'recipes' ? `<button class="restock-button" data-action="recipe-shopping" data-id="${escapeHtml(item.id)}" type="button">＋ Ingredienser</button><button class="restock-button" data-action="recipe-meal" data-id="${escapeHtml(item.id)}" type="button">＋ Planera</button>` : '';
+		const assigned = item.assigneeId ? `<p class="item-reference">Ansvarig: ${escapeHtml(listMembers.find(member => member.id === item.assigneeId)?.email || 'Tidigare medlem')}</p>` : '';
+		const attachments = listFiles.filter(file => file.item_id === `${type}:${item.id}`).map(file =>
+			`<p><a href="/api/tools/files/${encodeURIComponent(file.id)}${listQuery()}">${escapeHtml(file.name)}</a></p>`).join('');
 		return `<article class="item-card${completed}" data-id="${escapeHtml(item.id)}">
 			<div class="item-card-top"><span class="category-pill">${escapeHtml(category)}</span><div class="item-actions"><button class="icon-button" data-action="edit" data-type="${type}" data-id="${escapeHtml(item.id)}" type="button" aria-label="Redigera ${escapeHtml(item.title)}">✎</button><button class="icon-button" data-action="delete" data-type="${type}" data-id="${escapeHtml(item.id)}" type="button" aria-label="Ta bort ${escapeHtml(item.title)}">×</button></div></div>
 			<h3 class="item-title">${escapeHtml(item.title)}</h3>${item.reference ? `<p class="item-reference">${type === 'documents' && safeExternalUrl(item.reference) ? `<a href="${escapeHtml(safeExternalUrl(item.reference))}" target="_blank" rel="noopener noreferrer">Öppna länk ↗</a>` : escapeHtml(item.reference)}</p>` : ''}${type === 'meals' && item.recipeId ? `<p class="item-reference">Recept: ${escapeHtml(data.recipes.find(recipe => recipe.id === item.recipeId)?.title || item.title)}</p>` : ''}${detail}
+			${assigned}${attachments}${['shopping', 'service'].includes(type) && item.amount ? `<p>${type === 'shopping' ? 'Ungefärlig kostnad' : 'Kostnad'}: ${escapeHtml(item.amount)} kr</p>` : ''}
 			<div class="item-bottom"><span>${summary}</span><span class="item-bottom-actions">${dueDate}${restock}${petFood}${recipeActions}</span></div>
 		</article>`;
 	}
@@ -407,6 +420,14 @@
 
 	function renderList() {
 		if (activeView === 'calendar') return renderCalendar();
+		if (activeView === 'myTasks') {
+			const search = $('#search-input').value.trim().toLocaleLowerCase('sv');
+			const cards = Object.entries(data).flatMap(([kind, items]) => items.filter(item => kind !== 'service' && currentUser
+				&& item.assigneeId === currentUser.id && !item.completed && item.title.toLocaleLowerCase('sv').includes(search))
+				.map(item => itemCard(item, kind)));
+			$('#item-grid').innerHTML = cards.length ? cards.join('') : '<p class="preview-empty">Inga tilldelade uppgifter i vald lista. Välj ansvarig när du redigerar en post.</p>';
+			return;
+		}
 		const list = data[activeView] || [];
 		const search = $('#search-input').value.trim().toLocaleLowerCase('sv');
 		const filtered = list.filter(item => {
@@ -414,6 +435,7 @@
 			const matchesFilter = activeFilter === 'all' || (activeFilter === 'open' && !item.completed) || (activeFilter === 'completed' && item.completed);
 			return matchesSearch && matchesFilter;
 		}).sort((a, b) => {
+			if (activeView === 'service') return (b.due || '').localeCompare(a.due || '');
 			if (['meals', 'chores', 'maintenance', 'bills'].includes(activeView)) {
 				const dueSort = (a.due || '9999-12-31').localeCompare(b.due || '9999-12-31');
 				if (dueSort) return dueSort;
@@ -423,6 +445,10 @@
 		$('#item-grid').innerHTML = filtered.length
 			? filtered.map(item => itemCard(item, activeView)).join('')
 			: `<div class="empty-state"><div class="empty-illustration">${types[activeView].icon}</div><h2>${search ? 'Inget hittades' : 'Här börjar din lista'}</h2><p>${search ? 'Prova ett annat sökord.' : `Lägg till din första ${types[activeView].singular} så har du den samlad här.`}</p>${search ? '' : '<button class="primary-button" data-action="empty-add" type="button">＋ Lägg till</button>'}</div>`;
+		if (activeView === 'shopping') {
+			const total = filtered.filter(item => !item.completed).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+			$('#item-grid').insertAdjacentHTML('afterbegin', `<p class="section-card">Ungefärlig kostnad för kvarvarande inköp: ${total.toLocaleString('sv-SE')} kr</p>`);
+		}
 	}
 
 	function render() {
@@ -498,7 +524,7 @@
 			content.innerHTML = `<p class="modal-description">Hushåll: <strong>${escapeHtml(householdInfo.name)}</strong> · ${householdInfo.members.length}/10 personer</p><ul class="member-list">${householdInfo.members.map(member => `<li>${escapeHtml(member.email)}${member.role === 'owner' ? ' · ägare' : ''}</li>`).join('')}</ul>${householdInfo.inviteCode ? `<label class="form-field">Inbjudningskod<input id="invite-code" readonly value="${escapeHtml(householdInfo.inviteCode)}"></label><button class="primary-button full-button" data-action="copy-invite" type="button">Kopiera kod</button>` : '<p class="preview-empty">Be hushållets ägare om en inbjudningskod.</p>'}`;
 			return;
 		}
-		content.innerHTML = `${readOnly() ? '' : '<form id="create-household-form"><label class="form-field">Namn på hushållet<input name="name" maxlength="80" value="Mitt hushåll" required></label><button class="primary-button full-button" type="submit">Skapa delat hushåll</button></form><div class="share-divider">eller gå med i ett hushåll</div>'}<form id="join-household-form"><label class="form-field">Inbjudningskod<input name="code" minlength="12" maxlength="12" pattern="[A-Fa-f0-9]{12}" required placeholder="12 tecken"></label><button class="secondary-button full-button" type="submit">Gå med</button></form><p class="preview-empty">${readOnly() ? 'Som läsare går du med utan att ändra hushållets listor. Dina privata listor behålls separat men visas inte medan du tillhör hushållet.' : 'Dina privata listor följer med in i hushållet.'}</p>`;
+		content.innerHTML = `${readOnly() ? '' : '<form id="create-household-form"><label class="form-field">Namn på hushållet<input name="name" maxlength="80" value="Mitt hushåll" required></label><button class="primary-button full-button" type="submit">Skapa delat hushåll</button></form><div class="share-divider">eller gå med i ett hushåll</div>'}<form id="join-household-form"><label class="form-field">Inbjudningskod<input name="code" minlength="12" maxlength="12" pattern="[A-Fa-f0-9]{12}" required placeholder="12 tecken"></label><button class="secondary-button full-button" type="submit">Gå med</button></form><p class="preview-empty">${readOnly() ? 'Som läsare ändrar du inte hushållets listor. Befintliga hem-/kontolistor och filer behålls separat men visas inte medan du tillhör hushållet.' : 'Befintliga hem-/kontolistor och filer delas med hushållet.'} Namngivna privata listor förblir privata och tillgängliga för dig.</p>`;
 	}
 
 	async function submitHouseholdForm(event) {
@@ -510,22 +536,19 @@
 		button.disabled = true;
 		try {
 			await saveQueue;
+			if (currentListId) throw new Error('Välj Hem-/kontolistor innan du delar hushåll. Namngivna listors synlighet väljs vid skapandet.');
 			if (unsynced || !accountReady) throw new Error('Spara dina listor innan du delar. Ta Backup om synkningen misslyckats.');
 			if (readOnly() && form.id === 'create-household-form') throw new Error('Läsare kan inte skapa hushåll.');
 			if (form.id === 'join-household-form' && !window.confirm(readOnly()
 				? 'Gå med som läsare? Hushållets listor ändras inte och dina privata listor delas inte.'
-				: 'Alla dina listor delas med hushållets medlemmar. Vill du fortsätta?')) return;
-			const result = await api(form.id === 'create-household-form' ? '/household/create' : '/household/join', {
+				: 'Dina hem-/kontolistor och tillhörande filer delas med hushållets medlemmar. Namngivna privata listor förblir privata. Vill du fortsätta?')) return;
+			await api(form.id === 'create-household-form' ? '/household/create' : '/household/join', {
 				method: 'POST',
 				body: JSON.stringify(form.id === 'create-household-form' ? { name: formData.get('name') } : { code: formData.get('code') })
 			});
-			data = normaliseData(result.data);
-			householdInfo = result.household;
-			dataVersion = result.version;
-			accountReady = true;
-			$('#save-status').textContent = 'Sparat i det delade hushållet';
+			accountReady = false;
+			await loadAccountData(emptyData());
 			renderShareContent();
-			render();
 			showToast(form.id === 'create-household-form' ? 'Hushållet är skapat. Dela koden med de andra.' : 'Du har gått med i hushållet.');
 		} catch (error) {
 			showToast(error.message);
@@ -580,7 +603,7 @@
 	function getCalendarEvents() {
 		const sources = [
 			['tasks', '✓'], ['meals', '☼'], ['chores', '↻'], ['maintenance', '⌂'],
-			['bills', '¤'], ['pets', '♡'], ['errands', '↗'], ['expenses', 'kr']
+			['bills', '¤'], ['pets', '♡'], ['errands', '↗'], ['expenses', 'kr'], ['loans', '↗']
 		];
 		return sources.flatMap(([type, icon]) => data[type].filter(item => item.due && !item.completed)
 			.map(item => ({ ...item, type, icon })));
@@ -709,6 +732,9 @@
 			if (!config.fields.mealType) fields.splice(1, 0, field('Kategori', 'category', item?.category || defaults.category || config.categories[0], { select: categoriesFor(type) }));
 		}
 		if (type === 'notes') fields.push(`<label class="checkbox-field"><input type="checkbox" name="pinned" ${item?.pinned ? 'checked' : ''}> Fäst överst</label>`);
+		if (currentUser) fields.push(field('Ansvarig', 'assigneeId', String(item?.assigneeId || ''), {
+			select: [{ value: '', label: 'Ingen ansvarig' }, ...listMembers.map(member => ({ value: String(member.id), label: member.email }))]
+		}));
 		$('#form-fields').innerHTML = fields.join('');
 		if (type === 'pets') updatePetFields();
 		$('#item-modal').hidden = false;
@@ -766,6 +792,7 @@
 			completed: Boolean(previous?.completed),
 			pinned: Boolean(formData.get('pinned')),
 			templateKey: previous?.templateKey || '',
+			assigneeId: formData.get('assigneeId') ? Number(formData.get('assigneeId')) : null,
 			createdAt: previous?.createdAt || new Date().toISOString()
 		};
 		if (type === 'documents' && item.reference && !safeExternalUrl(item.reference)) {
@@ -1065,15 +1092,18 @@
 	}
 
 	async function loadAccountData(guestData) {
-		const result = await api('/household');
+		const base = await api('/household');
+		householdInfo = base.household;
+		const result = currentListId ? await api(dataEndpoint()) : base;
 		const remote = normaliseData(result.data);
-		householdInfo = result.household;
+		listMembers = currentListId ? result.members : householdInfo?.members || [{ id: currentUser.id, email: currentUser.email }];
+		listFiles = (await api(`/tools/files${listQuery()}`)).items;
 		dataVersion = result.version;
-		data = readOnly() ? remote : mergeData(remote, guestData);
+		data = readOnly() || currentListId ? remote : mergeData(remote, guestData);
 		if (readOnly() && Object.values(guestData).some(items => items.length)) {
 			showToast('Dina lokala gästlistor behålls på enheten men importeras inte till ett läsarkonto.');
 		}
-		if (!readOnly() && Object.values(guestData).some(items => items.length)) {
+		if (!readOnly() && !currentListId && Object.values(guestData).some(items => items.length)) {
 			const saved = await api('/household', { method: 'PUT', body: JSON.stringify({ data, version: dataVersion }) });
 			dataVersion = saved.version;
 			try {
@@ -1082,25 +1112,33 @@
 				showToast('Listorna synkades, men webbläsarens lokala kopia kunde inte rensas.');
 			}
 		}
+		const { lists } = await api('/lists');
+		$('#list-select').replaceChildren(new Option('Hem-/kontolistor', ''));
+		for (const list of lists) $('#list-select').add(new Option(`${list.name} · ${list.shared ? 'Delad' : 'Privat'}`, list.id));
+		$('#list-select').value = currentListId;
 		accountReady = true;
-		$('#save-status').textContent = readOnly() ? 'Läsbehörighet – inga ändringar kan sparas' : householdInfo ? 'Sparat i hushållet' : 'Sparat på ditt konto';
-		$('#share-button').hidden = false;
+		$('#save-status').textContent = readOnly() ? 'Läsbehörighet – inga ändringar kan sparas' : currentListId ? 'Sparat i vald lista' : householdInfo ? 'Sparat i hushållet' : 'Sparat på ditt konto';
+		$('#share-button').hidden = Boolean(currentListId);
 		updateAccountControls();
 		render();
 	}
 
 	async function syncSharedHousehold() {
-		if (!currentUser || !accountReady || !householdInfo || unsynced || pendingSaves || syncing || !$('#item-modal').hidden) return;
+		if (!currentUser || !accountReady || (!householdInfo && !currentListId) || unsynced || pendingSaves || syncing || !$('#item-modal').hidden) return;
 		syncing = true;
 		const generation = editGeneration;
 		const userId = currentUser.id;
+		const scope = currentListId;
+		const endpoint = dataEndpoint();
 		try {
-			const result = await api('/household');
-			if (!result.household || generation !== editGeneration || unsynced || currentUser?.id !== userId || !accountReady) return;
+			const [result, files] = await Promise.all([api(endpoint), api(`/tools/files${scope ? `?list=${encodeURIComponent(scope)}` : ''}`)]);
+			if (generation !== editGeneration || scope !== currentListId || unsynced || currentUser?.id !== userId || !accountReady) return;
 			data = normaliseData(result.data);
-			householdInfo = result.household;
+			if (!currentListId) householdInfo = result.household;
+			listFiles = files.items;
+			listMembers = currentListId ? result.members : householdInfo?.members || [{ id: currentUser.id, email: currentUser.email }];
 			dataVersion = result.version;
-			$('#save-status').textContent = readOnly() ? 'Synkat med hushållet – läsbehörighet' : 'Synkat med hushållet';
+			$('#save-status').textContent = readOnly() ? 'Synkat – läsbehörighet' : currentListId ? 'Synkat med vald lista' : 'Synkat med hushållet';
 			render();
 		} catch (error) {
 			$('#save-status').textContent = 'Hushållet kunde inte synkas';
@@ -1152,6 +1190,10 @@
 			if (unsynced && !window.confirm('Det finns osynkade ändringar. Ta Backup innan du loggar ut. Logga ut ändå?')) return;
 			await api('/auth/logout', { method: 'POST' });
 			currentUser = null;
+			currentListId = '';
+			listFiles = [];
+			listMembers = [];
+			history.replaceState(null, '', '/');
 			accountReady = false;
 			householdInfo = null;
 			dataVersion = null;
@@ -1174,6 +1216,9 @@
 		$('#password-button').hidden = !currentUser;
 		$('#security-link').hidden = !currentUser;
 		$('#register-button').hidden = Boolean(currentUser);
+		$('#tools-link').hidden = !currentUser;
+		$('#tools-link').href = `/tools.html${listQuery()}`;
+		$('#list-select-label').hidden = !currentUser;
 	}
 
 	async function changePassword(event) {
@@ -1202,6 +1247,31 @@
 		document.documentElement.dataset.theme = theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 		$('#footer-date').textContent = new Intl.DateTimeFormat('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 		$('#item-form').addEventListener('submit', saveItem);
+		$('#list-select').addEventListener('change', async event => {
+			const next = event.target.value;
+			let previous;
+			event.target.disabled = true;
+			try {
+				await saveQueue;
+				if (unsynced) throw new Error('Ta backup och ladda om innan du byter lista. Du har osynkade ändringar.');
+				previous = { currentListId, householdInfo, listMembers, listFiles, dataVersion, data, accountReady };
+				editGeneration += 1;
+				currentListId = next;
+				history.replaceState(null, '', `/${listQuery()}`);
+				accountReady = false;
+				await loadAccountData(emptyData());
+			} catch (error) {
+				if (previous) {
+					({ currentListId, householdInfo, listMembers, listFiles, dataVersion, data, accountReady } = previous);
+					history.replaceState(null, '', `/${listQuery()}`);
+					updateAccountControls();
+					render();
+				}
+				event.target.value = currentListId;
+				showToast(error.message);
+			}
+			finally { event.target.disabled = false; }
+		});
 		$('#auth-form').addEventListener('submit', handleAuth);
 		$('#register-button').addEventListener('click', () => openAuthModal('register'));
 		$('#password-form').addEventListener('submit', changePassword);
